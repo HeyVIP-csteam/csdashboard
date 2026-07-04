@@ -262,6 +262,9 @@ canvas{max-height:200px}
   .kpi-val{font-size:19px!important}
   .lb-row{grid-template-columns:34px 1fr;gap:8px 0}
   .lb-scores{grid-column:1/-1;justify-content:flex-start;padding-right:0;padding-left:48px;flex-wrap:wrap;gap:16px}
+  .ap-header-row{flex-direction:column}
+  .ap-cellrow{flex-direction:column;align-self:auto;width:100%}
+  .ap-cell{max-height:180px}
 }
 
 /* ── SMALL MOBILE (≤480px) ── */
@@ -353,10 +356,10 @@ canvas{max-height:200px}
 .ap-text-info-line{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--muted)}
 .ap-text-info-lbl{min-width:84px;flex-shrink:0}
 .ap-text-info-line b{color:var(--text);font-weight:700}
-.ap-cellrow{flex:1;min-width:0;display:flex;gap:12px}
-.ap-cell{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px 16px}
-.ap-cell-lbl{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
-.ap-cell-list{list-style:none;margin:0;padding:0;font-size:12px;color:var(--text);line-height:1.9}
+.ap-cellrow{flex:1;min-width:0;display:flex;gap:12px;align-self:stretch}
+.ap-cell{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;max-height:280px}
+.ap-cell-lbl{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;flex-shrink:0}
+.ap-cell-list{list-style:none;margin:0;padding:0 6px 0 0;font-size:12px;color:var(--text);line-height:1.9;overflow-y:auto;flex:1;min-height:0}
 .ap-cell-list li{padding-left:14px;position:relative}
 .ap-cell-list li::before{content:'';position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:var(--purple)}
 /* ── Sapphire Dark theme ── */
@@ -410,6 +413,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
     <select id="region-select" onchange="switchRegion(this.value)" style="width:100%;margin-top:10px;background:var(--card);border:1px solid var(--border2);color:var(--text);font-size:11px;font-weight:700;padding:7px 10px;border-radius:7px;font-family:var(--mono);cursor:pointer">
       <option value="INR">🇮🇳 INR</option>
       <option value="PKR">🇵🇰 PKR</option>
+      <option value="PHP">🇵🇭 PHP</option>
     </select>
   </div>
   <div class="nav-sec" data-i18n="home">Home</div>
@@ -992,6 +996,22 @@ var REGION_CONFIG={
     brandLabels:{CX:'CX',MP:'MP',BJ:'BJ',JW:'JW',DP:'DP',KV8:'KV8',HB:'HB',SBJ:'SBJ',SP:'SP'},
     brandColors:{CX:'#00b0ff',MP:'#9b7ff4',BJ:'#00e676',JW:'#ff4081',DP:'#ff9100',KV8:'#2dd4bf',HB:'#facc15',SBJ:'#f472b6',SP:'#60a5fa'},
     brandEmoji:{CX:'💙',MP:'💜',BJ:'💚',JW:'🩷',DP:'🧡',KV8:'🟢',HB:'🟡',SBJ:'💗',SP:'🔵'},
+    internalMode:'roster'
+  },
+  PHP:{
+    sheetId:'1axIS9xBWuG54xDe4FqP5R1h4WRMXtJEXhKPvDqg-djA',
+    ranges:{
+      sla:'Internal SLA Metrics!A1:AD300',
+      daily:'Daily Chat Report!A1:AB5000',
+      qa:'QA Error Diagnostics!A1:U1000',
+      slaOut:'Outsource SLA Metrics!A1:AD300', // tab exists but is currently empty — UI auto-hides Outsource panels until data appears
+      profile:'CS Detail!A1:S500'
+    },
+    tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail'],
+    brands:['BJ','BV'],
+    brandLabels:{BJ:'BJ',BV:'BV'},
+    brandColors:{BJ:'#00e676',BV:'#ff9100'},
+    brandEmoji:{BJ:'💚',BV:'🧡'},
     internalMode:'roster'
   }
 };
@@ -4367,17 +4387,18 @@ function parseAgentProfileSheet(rows){
     return (best&&/outsource/i.test(best.label))?'Outsource':'Internal';
   }
 
-  // Find the header row — the one containing a "PSD ID" cell (usually row 2)
+  // Find the header row — the one containing a "PSD" / "PSD ID" cell (usually row 1 or 2;
+  // some regions' sheets just say "PSD" with no "ID" suffix, so match either form)
   var headerIdx=-1,headerRow=null;
   for(var i=0;i<Math.min(rows.length,6);i++){
     var r=rows[i]||[];
-    if(r.some(function(c){return /psd\s*id/i.test(String(c||''));})){headerIdx=i;headerRow=r;break;}
+    if(r.some(function(c){return /^psd(\s*id)?$/i.test(String(c||'').trim());})){headerIdx=i;headerRow=r;break;}
   }
   if(headerIdx<0) return out;
 
-  // Every "PSD ID" cell in the header row marks the start of one block (Internal / Outsource)
+  // Every "PSD" / "PSD ID" cell in the header row marks the start of one block (Internal / Outsource)
   var psdCols=[];
-  headerRow.forEach(function(c,i){ if(/psd\s*id/i.test(String(c||''))) psdCols.push(i); });
+  headerRow.forEach(function(c,i){ if(/^psd(\s*id)?$/i.test(String(c||'').trim())) psdCols.push(i); });
   if(!psdCols.length) return out;
 
   psdCols.forEach(function(psdCol,bi){
@@ -4390,9 +4411,11 @@ function parseAgentProfileSheet(rows){
       if(h.indexOf('name')>=0&&cols.name===undefined) cols.name=c;
       else if(h.indexOf('photo')>=0&&cols.photo===undefined) cols.photo=c;
       else if(h.indexOf('project')>=0&&cols.project===undefined) cols.project=c;
+      else if(h.indexOf('position')>=0&&cols.position===undefined) cols.position=c;
       else if(h.indexOf('perfo')>=0&&cols.perf===undefined) cols.perf=c;
       else if(h.indexOf('task')>=0&&cols.task===undefined) cols.task=c;
       else if((h.indexOf('remark')>=0||h.indexOf('reamark')>=0)&&cols.remark===undefined) cols.remark=c;
+      else if(h.indexOf('status')>=0&&cols.status===undefined) cols.status=c;
     }
     var team=teamForCol_(psdCol);
     var current=null;
@@ -4412,7 +4435,9 @@ function parseAgentProfileSheet(rows){
           psdId:psdVal,name:nameVal,team:team,
           photo:cols.photo!==undefined?normalizePhotoUrl_(row[cols.photo]):'',
           project:cols.project!==undefined?String(row[cols.project]||'').trim():'',
+          position:cols.position!==undefined?String(row[cols.position]||'').trim():'',
           performance:cols.perf!==undefined?String(row[cols.perf]||'').trim():'',
+          status:cols.status!==undefined?String(row[cols.status]||'').trim():'',
           tasks:[],
           // Absolute sheet position of this row + the Photo link column, so the
           // avatar-upload feature knows exactly which cell to write back to.
@@ -4508,11 +4533,18 @@ function renderAgentDirCard_(a){
   var teamLbl=a.team==='Outsource'?(lang==='zh'?'外包':'Outsource'):(lang==='zh'?'内部':'Internal');
   var quick=aggregateAgentSLA(a);
   var statLbl=quick.totalChats?fn(quick.totalChats)+(lang==='zh'?' 单':' chats'):(lang==='zh'?'暂无数据':'no data yet');
+  var statusRaw=profile&&profile.status?profile.status.trim():'';
+  var statusKey=statusRaw.toLowerCase();
+  var statusDotHtml='';
+  if(statusRaw){
+    var sColor=statusKey.indexOf('active')>=0?'var(--green)':(statusKey.indexOf('inactive')>=0||statusKey.indexOf('leave')>=0||statusKey.indexOf('resign')>=0?'var(--red)':'var(--muted)');
+    statusDotHtml='<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:'+sColor+';display:inline-block"></span>'+statusRaw+'</span>';
+  }
   return '<div class="ap-dir-card" onclick="openAgentProfile(\''+a.key.replace(/'/g,"\\'")+'\')">'+
     avatarHtml+
     '<div class="ap-dir-info">'+
       '<div class="ap-dir-name">'+a.name+'</div>'+
-      '<div class="ap-dir-meta"><span>'+(a.psdId||'—')+'</span><span>·</span><span>'+teamLbl+'</span></div>'+
+      '<div class="ap-dir-meta"><span>'+(a.psdId||'—')+'</span><span>·</span><span>'+teamLbl+'</span>'+(statusDotHtml?'<span>·</span>'+statusDotHtml:'')+'</div>'+
       '<div class="ap-dir-stat">'+statLbl+'</div>'+
     '</div>'+
   '</div>';
@@ -4634,14 +4666,22 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
   var perfCls=perfKeyRaw.indexOf('good')>=0?'good':(perfKeyRaw.indexOf('bad')>=0||perfKeyRaw.indexOf('poor')>=0?'bad':(perfKeyRaw?'average':''));
   var perfColor=perfCls==='good'?'var(--green)':perfCls==='bad'?'var(--red)':perfCls==='average'?'var(--amber)':'var(--muted)';
 
-  // Plain "Label: Value" text lines — PSD-ID / Team / Project / Performance,
-  // aligned into two columns (fixed-width label + value) so they line up.
+  var statusRaw=profile&&profile.status?profile.status.trim():'';
+  var statusKey=statusRaw.toLowerCase();
+  var statusColor=statusKey.indexOf('active')>=0?'var(--green)':(statusKey.indexOf('inactive')>=0||statusKey.indexOf('leave')>=0||statusKey.indexOf('resign')>=0?'var(--red)':'var(--muted)');
+
+  // Plain "Label: Value" text lines — PSD-ID / Team / Project / Position /
+  // Performance / Status — aligned into two columns (fixed-width label +
+  // value) so they line up. Position/Status only render when the sheet has
+  // that column (older CS Detail sheets without it just fall back to '—').
   var textInfo=
     '<div class="ap-text-info">'+
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'PSD 编号':'PSD ID')+'</span><b>'+(identity.psdId||'—')+'</b></div>'+
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'团队':'CS')+'</span><b>'+teamLbl+'</b></div>'+
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'项目':'Project')+'</span><b>'+(profile&&profile.project?profile.project:'—')+'</b></div>'+
+      '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'职位':'Position')+'</span><b>'+(profile&&profile.position?profile.position:'—')+'</b></div>'+
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'表现':'Performance')+'</span><b style="color:'+perfColor+'">'+(profile&&profile.performance?translatePerformance_(profile.performance,isZh):'—')+'</b></div>'+
+      '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'状态':'Status')+'</span><b style="color:'+statusColor+'">'+(statusRaw||'—')+'</b></div>'+
     '</div>';
 
   var canUploadPhoto=profile&&profile.photoCol!==undefined&&profile.photoCol!==null;
