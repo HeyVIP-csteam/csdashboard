@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
   --bg:#0a0d16;--panel:#0f1320;--card:#131928;--border:#1a2035;--border2:#243050;
@@ -327,6 +328,9 @@ canvas{max-height:200px}
 .ap-dir-stat{font-size:10px;color:var(--teal);font-family:var(--mono);margin-top:3px}
 .ap-photo{width:64px;height:64px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border2);background:var(--bg)}
 .ap-photo-fallback{width:64px;height:64px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#0a0d16;border:2px solid var(--border2)}
+.ap-avatar-upload-btn{position:absolute;bottom:-2px;right:-2px;width:26px;height:26px;border-radius:50%;background:var(--purple);border:2px solid var(--card);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.ap-avatar-upload-btn:hover{opacity:.85}
+.ap-avatar-upload-btn:disabled{opacity:.5;cursor:wait}
 .ap-badge{display:inline-flex;align-items:center;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.03em;font-family:var(--mono)}
 .ap-badge.internal{background:var(--red-d);color:var(--red)}
 .ap-badge.outsource{background:var(--amber-d);color:var(--amber)}
@@ -935,6 +939,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
     </div>
     <div class="zoom-body" id="ap-body"></div>
     <div class="zoom-foot" data-i18n="zoomEscHint">Press ESC or click outside to close</div>
+    <input type="file" id="ap-avatar-file" accept="image/*" style="display:none" onchange="apOnAvatarFileSelected(this)">
   </div>
 </div>
 
@@ -4133,6 +4138,140 @@ function renderAudit(){
 //          repeat for every task row until the next agent's PSD ID appears.
 var AGENT_PROFILE_DATA={};
 
+// ── AVATAR UPLOAD (Google OAuth → Drive → writes the link back to "CS Detail") ──
+// Uses Google Identity Services for a client-side-only OAuth flow (no backend
+// server, no client secret needed). Only Google accounts added as "Test users"
+// on the OAuth consent screen can complete this until the app is verified/published.
+var GOOGLE_OAUTH_CLIENT_ID='235621563-llqv1rihdvkd42mdkug4jqdeg54dfqf5.apps.googleusercontent.com';
+var AVATAR_DRIVE_FOLDER_ID='1KcV155gOV-7qaNgCmrrLYt2CODBJ0iKK';
+var apTokenClient=null;
+var apAccessToken=null;
+
+// Converts a 0-based column index to its A1 letter (0→A, 25→Z, 26→AA, ...)
+function colLetter_(idx){
+  var s='',n=idx+1;
+  while(n>0){var m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}
+  return s;
+}
+
+function apInitTokenClient_(){
+  if(apTokenClient||typeof google==='undefined'||!google.accounts) return;
+  apTokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:GOOGLE_OAUTH_CLIENT_ID,
+    scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
+    callback:function(){}
+  });
+}
+
+// Requests (or reuses) an access token, then calls cb(token). Shows a plain
+// alert on failure — this can fail if: the signed-in Google account isn't on
+// the OAuth consent screen's Test users list, or Drive/Sheets API scopes were
+// declined.
+function apRequestToken_(cb){
+  if(typeof google==='undefined'||!google.accounts){
+    alert(lang==='zh'?'Google 登录组件还没加载完成,请稍等几秒后重试。':'Google sign-in is still loading — try again in a few seconds.');
+    return;
+  }
+  apInitTokenClient_();
+  apTokenClient.callback=function(resp){
+    if(resp.error){
+      alert((lang==='zh'?'Google 授权失败: ':'Google authorization failed: ')+resp.error);
+      return;
+    }
+    apAccessToken=resp.access_token;
+    cb(apAccessToken);
+  };
+  apTokenClient.requestAccessToken({prompt:apAccessToken?'':'consent'});
+}
+
+function apTriggerAvatarUpload(){
+  if(!apCurrentAgentKey) return;
+  var input=document.getElementById('ap-avatar-file');
+  if(input) input.click();
+}
+
+function apOnAvatarFileSelected(input){
+  var file=input.files&&input.files[0];
+  input.value=''; // allow re-selecting the same file later
+  if(!file) return;
+  if(file.size>8*1024*1024){
+    alert(lang==='zh'?'图片太大了,请选择 8MB 以内的文件。':'Image is too large — please choose a file under 8MB.');
+    return;
+  }
+  apRequestToken_(function(token){ apDoAvatarUpload_(file,token); });
+}
+
+function apSetUploadBtnState_(uploading){
+  var btn=document.querySelector('.ap-avatar-upload-btn');
+  if(!btn) return;
+  btn.disabled=uploading;
+  btn.innerHTML=uploading?'<i class="fa-solid fa-spinner fa-spin"></i>':'<i class="fa-solid fa-camera"></i>';
+}
+
+function driveUploadImage_(file,token){
+  var metadata={name:(Date.now()+'_'+file.name).replace(/[^A-Za-z0-9_.\-]/g,'_'),parents:[AVATAR_DRIVE_FOLDER_ID]};
+  var form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+  form.append('file',file);
+  return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+token},
+    body:form
+  }).then(function(r){return r.json();});
+}
+
+function drivePublicPermission_(fileId,token){
+  return fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({role:'reader',type:'anyone'})
+  }).then(function(r){return r.json();});
+}
+
+function sheetsUpdateCell_(tabName,rowIndex,colIndex,value,token){
+  var range=tabName+'!'+colLetter_(colIndex)+(rowIndex+1);
+  var url='https://sheets.googleapis.com/v4/spreadsheets/'+REGION_CONFIG[currentRegion].sheetId+'/values/'+encodeURIComponent(range)+'?valueInputOption=RAW';
+  return fetch(url,{
+    method:'PUT',
+    headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({values:[[value]]})
+  }).then(function(r){return r.json();});
+}
+
+function apDoAvatarUpload_(file,token){
+  apSetUploadBtnState_(true);
+  var dir=buildAgentDirectory();
+  var identity=dir[apCurrentAgentKey];
+  if(!identity){ apSetUploadBtnState_(false); return; }
+  var profile=AGENT_PROFILE_DATA[normPsd_(identity.psdId)]||AGENT_PROFILE_DATA[identity.name.trim().toUpperCase()];
+  if(!profile||profile.photoCol===undefined||profile.photoCol===null||profile.photoRow===undefined){
+    apSetUploadBtnState_(false);
+    alert(lang==='zh'?'这个坐席在 "CS Detail" 表里没有 Photo link 列,无法上传。':'This agent has no Photo link column in "CS Detail" — can\'t upload.');
+    return;
+  }
+
+  driveUploadImage_(file,token).then(function(fileResp){
+    if(!fileResp||!fileResp.id) throw new Error(fileResp&&fileResp.error?fileResp.error.message:'Drive upload failed');
+    return drivePublicPermission_(fileResp.id,token).then(function(){
+      var url='https://drive.google.com/thumbnail?id='+fileResp.id+'&sz=w400';
+      var cfg=REGION_CONFIG[currentRegion];
+      var tabName=cfg.ranges.profile.split('!')[0];
+      return sheetsUpdateCell_(tabName,profile.photoRow,profile.photoCol,url,token).then(function(resp){
+        if(resp&&resp.error) throw new Error(resp.error.message);
+        profile.photo=url; // reflect immediately without waiting for a full reload
+        apSetUploadBtnState_(false);
+        renderCurrentAgentProfile_();
+        apFilterDirectoryGrid(); // keep the directory grid's avatar in sync too
+      });
+    });
+  }).catch(function(e){
+    apSetUploadBtnState_(false);
+    console.error('Avatar upload failed:',e);
+    alert((lang==='zh'?'上传失败: ':'Upload failed: ')+(e&&e.message?e.message:'unknown error'));
+  });
+}
+// ── END AVATAR UPLOAD ──────────────────────────────────────────────────
+
 // Normalizes a PSD-ID for matching/deduping across sheets that format it
 // differently (e.g. "CG-39188" vs "CG 39188" vs "cg39188" are all the same
 // person) — strips everything but letters/digits, then uppercases.
@@ -4233,7 +4372,11 @@ function parseAgentProfileSheet(rows){
           photo:cols.photo!==undefined?normalizePhotoUrl_(row[cols.photo]):'',
           project:cols.project!==undefined?String(row[cols.project]||'').trim():'',
           performance:cols.perf!==undefined?String(row[cols.perf]||'').trim():'',
-          tasks:[]
+          tasks:[],
+          // Absolute sheet position of this row + the Photo link column, so the
+          // avatar-upload feature knows exactly which cell to write back to.
+          photoRow:r2,
+          photoCol:cols.photo
         };
       }
       if(current){
@@ -4460,9 +4603,13 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'表现':'Performance')+'</span><b style="color:'+perfColor+'">'+(profile&&profile.performance?translatePerformance_(profile.performance,isZh):'—')+'</b></div>'+
     '</div>';
 
+  var canUploadPhoto=profile&&profile.photoCol!==undefined&&profile.photoCol!==null;
+  var uploadBtnHtml=canUploadPhoto?
+    '<button class="ap-avatar-upload-btn" onclick="apTriggerAvatarUpload()" title="'+(isZh?'上传头像':'Upload photo')+'"><i class="fa-solid fa-camera"></i></button>':'';
+
   var headerLeft=
     '<div class="ap-header-left">'+
-      photoHtml+
+      '<div style="position:relative;flex-shrink:0">'+photoHtml+uploadBtnHtml+'</div>'+
       '<div style="min-width:0">'+
         '<div style="font-size:17px;font-weight:800;color:var(--text)">'+identity.name+'</div>'+
         textInfo+
