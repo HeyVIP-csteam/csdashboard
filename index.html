@@ -465,7 +465,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
         <option value="MP">MP</option>
         <option value="BJ">BJ</option>
         <option value="BV">BV</option>
-        <option value="Welcome">Welcome / JW</option>
+        <option value="Welcome">Welcome/Jwy</option>
       </select>
     </div>
     <div class="filter-div" id="brand-filter-div2"></div>
@@ -528,7 +528,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
           <option value="MP">MP</option>
           <option value="BJ">BJ</option>
           <option value="BV">BV</option>
-          <option value="Welcome">Welcome / JW</option>
+          <option value="Welcome">Welcome/Jwy</option>
         </select></div>
         <div class="filter-div"></div>
         <span class="filter-info" id="dr-info">All Months</span>
@@ -737,7 +737,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
           <option value="MP">MP</option>
           <option value="BJ">BJ</option>
           <option value="BV">BV</option>
-          <option value="Welcome">Welcome / JW</option>
+          <option value="Welcome">Welcome/Jwy</option>
         </select></div>
         <div class="filter-div"></div>
         <span class="filter-info" id="au-filter-info">All Months · All Brands</span>
@@ -874,7 +874,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
             <option value="MP">MP</option>
             <option value="BJ">BJ</option>
             <option value="BV">BV</option>
-            <option value="Welcome">Welcome / JW</option>
+            <option value="Welcome">Welcome/Jwy</option>
           </select>
           <span class="filter-lbl" data-i18n="auditCompare">Compare</span>
           <select class="fsel" id="audit-period-sel" onchange="setAuditPeriodFromSelect()">
@@ -963,7 +963,7 @@ var REGION_CONFIG={
     },
     tabNames:['Daily Chat Report','CX Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail'],
     brands:['CX','MP','BJ','BV','Welcome'],
-    brandLabels:{CX:'CX',MP:'MP',BJ:'BJ',BV:'BV',Welcome:'Welcome / JW'},
+    brandLabels:{CX:'CX',MP:'MP',BJ:'BJ',BV:'BV',Welcome:'Welcome/Jwy'},
     brandColors:{CX:'#00b0ff',MP:'#9b7ff4',BJ:'#00e676',BV:'#ff9100',Welcome:'#ff4081'},
     brandEmoji:{CX:'💙',MP:'💜',BJ:'💚',BV:'🧡',Welcome:'🩷'},
     internalMode:'brand',
@@ -1566,7 +1566,7 @@ function parseVol(rows){
       else if(hu==='MP'){colMP=i;}
       else if(hu==='BJ'){colBJ=i;}
       else if(hu==='BV'){colBV=i;}
-      else if(hu==='WELCOME'||hu==='JW'){colWelcome=i;}
+      else if(hu.indexOf('WELCOME')>=0||hu.indexOf('JWY')>=0||hu==='JW'){colWelcome=i;}
     });
     if(found) break;
   }
@@ -3536,7 +3536,7 @@ var DR_MO_MAP={
 var DR_BRANDS=['CX','MP','BJ','BV','Welcome'];
 var DR_COLORS={CX:'#00b0ff',MP:'#9b7ff4',BJ:'#00e676',BV:'#ff9100',Welcome:'#ff4081'};
 var DR_EMOJI={CX:'💙',MP:'💜',BJ:'💚',BV:'🧡',Welcome:'🩷'};
-var BRAND_LABELS={CX:'CX',MP:'MP',BJ:'BJ',BV:'BV',Welcome:'Welcome / JW'};
+var BRAND_LABELS={CX:'CX',MP:'MP',BJ:'BJ',BV:'BV',Welcome:'Welcome/Jwy'};
 var DR_MO_ORDER=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var drRaw=null; // store parsed months for filter
 var drMonthFilter='all';
@@ -3557,7 +3557,7 @@ function canonicalBrand_(token){
   var cfg=REGION_CONFIG[currentRegion];
   var exact=cfg.brands.filter(function(b){return b.toUpperCase()===t;})[0];
   if(exact) return exact;
-  if(t==='WELCOME'||t==='JW'){
+  if(t.indexOf('WELCOME')>=0||t.indexOf('JWY')>=0||t==='JW'){
     var w=cfg.brands.filter(function(b){return b.toUpperCase()==='WELCOME';})[0];
     if(w) return w;
   }
