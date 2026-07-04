@@ -913,7 +913,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
       <button class="zoom-close" onclick="closeZoomModal()">✕</button>
     </div>
     <div class="zoom-body" id="zoom-body"></div>
-    <div class="zoom-foot" id="zoom-foot">Press ESC or click outside to close</div>
+    <div class="zoom-foot" id="zoom-foot" data-i18n="zoomEscHint">Press ESC or click outside to close</div>
   </div>
 </div>
 
@@ -934,7 +934,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
       </div>
     </div>
     <div class="zoom-body" id="ap-body"></div>
-    <div class="zoom-foot">Press ESC or click outside to close</div>
+    <div class="zoom-foot" data-i18n="zoomEscHint">Press ESC or click outside to close</div>
   </div>
 </div>
 
@@ -1194,7 +1194,9 @@ var T={
     auditTotal:'Total',auditNoData:'Not enough data for this comparison yet.',
     auditAgentBot:'Agent & Bot',
     auditAgentProfile:'Agent Audit Profile',
-    auditProfileHint:'🔍 Search an agent by name or PSD-ID above to open their audit profile — Agent Info, SLA, QA Errors and Handled Chats all in one panel.'
+    auditProfileHint:'🔍 Search an agent by name or PSD-ID above to open their audit profile — Agent Info, SLA, QA Errors and Handled Chats all in one panel.',
+    apSearchPlaceholder:'Search agent name or PSD-ID…',
+    zoomEscHint:'Press ESC or click outside to close'
   },
   zh:{
     chatVolume:'聊天量',dailyReport:'每日报告',slaMetrics:'SLA 指标',peaksValleys:'峰谷分析',
@@ -1262,7 +1264,9 @@ var T={
     auditTotal:'总计',auditNoData:'数据量暂不足以进行该项对比。',
     auditAgentBot:'人工与机器人',
     auditAgentProfile:'坐席审计档案',
-    auditProfileHint:'🔍 在上方搜索坐席姓名或 PSD-ID,打开该坐席的审计档案——坐席信息、SLA、QA 错误与接单量全部集中在一个面板里。'
+    auditProfileHint:'🔍 在上方搜索坐席姓名或 PSD-ID,打开该坐席的审计档案——坐席信息、SLA、QA 错误与接单量全部集中在一个面板里。',
+    apSearchPlaceholder:'搜索坐席姓名或 PSD-ID…',
+    zoomEscHint:'按 ESC 键或点击外部区域关闭'
   }
 };
 
@@ -1373,6 +1377,8 @@ function toggleLang(){
   if(raw.qa&&raw.qa.length) renderQA();
   var searchEl=document.getElementById('qa-log-search');
   if(searchEl) searchEl.placeholder=T[lang].searchCsName||'Search CS Name…';
+  var apSearchEl=document.getElementById('ap-search-input');
+  if(apSearchEl) apSearchEl.placeholder=T[lang].apSearchPlaceholder||'Search agent name or PSD-ID…';
   // Re-render Daily Report tags/labels
   if(drRaw) renderDailyReport(null);
   // Re-render Audit tags/labels
@@ -1918,8 +1924,17 @@ function picColor_(name){
   return PIC_PALETTE[s%PIC_PALETTE.length];
 }
 function picInitials_(name){
-  var parts=name.trim().split(/\s+/);
-  return parts.length>1?(parts[0][0]+parts[1][0]).toUpperCase():name.slice(0,2).toUpperCase();
+  // Strip parentheses/punctuation first so a name like "Sarath (Malavika)"
+  // yields "SM" instead of "S(" — take the first letter of each real word.
+  var clean=String(name||'').replace(/[()（）]/g,' ').trim();
+  var parts=clean.split(/\s+/).filter(function(p){return p.length>0;});
+  var letters=parts.map(function(p){
+    var m=p.match(/[A-Za-z\u4e00-\u9fff]/);
+    return m?m[0]:'';
+  }).filter(function(c){return c;});
+  if(letters.length>=2) return (letters[0]+letters[1]).toUpperCase();
+  if(letters.length===1) return letters[0].toUpperCase();
+  return '?';
 }
 
 var qaLogCache=[];
@@ -4125,6 +4140,29 @@ function normPsd_(s){
   return String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
 }
 
+// Translates the small, fixed set of Performance ratings the "CS Detail"
+// sheet actually uses (GOOD / Average / Bad) — this is a controlled value
+// list, not free text, so it's safe to map. Anything outside this known set
+// (e.g. a future rating the sheet introduces) is shown as-is rather than
+// guessed at.
+function translatePerformance_(raw,isZhMode){
+  if(!raw) return raw;
+  var v=String(raw).trim().toLowerCase();
+  var map={good:{en:'GOOD',zh:'优秀'},average:{en:'AVERAGE',zh:'一般'},bad:{en:'BAD',zh:'较差'},poor:{en:'POOR',zh:'较差'}};
+  for(var k in map){ if(v.indexOf(k)>=0) return isZhMode?map[k].zh:map[k].en; }
+  return raw;
+}
+
+// Formats a raw seconds value as "Xm Ys" (e.g. 63 → "1m 3s") — used only in
+// the Agent Audit Profile KPI cards; the rest of the app (SLA Metrics page
+// etc.) intentionally keeps showing raw seconds, so this is scoped here.
+function fmtMinSec_(sec){
+  sec=Math.round(Number(sec)||0);
+  var m=Math.floor(sec/60);
+  var s=sec%60;
+  return m+'m '+s+'s';
+}
+
 function normalizePhotoUrl_(u){
   u=String(u||'').trim();
   if(!u) return '';
@@ -4324,9 +4362,16 @@ function renderAgentDirectoryGrid(query){
   var internalList=list.filter(function(a){return a.team!=='Outsource';});
   var outsourceList=list.filter(function(a){return a.team==='Outsource';});
 
-  container.innerHTML=
-    renderAgentDirPanel_('🟢',isZh_()?'内部坐席 · Internal CS':'Internal CS','var(--green)',internalList)+
-    renderAgentDirPanel_('🟠',isZh_()?'外包坐席 · Outsource CS':'Outsource CS','var(--amber)',outsourceList);
+  // While actively searching, a team panel with zero matches disappears
+  // entirely instead of showing an empty "no match" box — with no search
+  // active, both panels always show (even a 0-count team, for the overview).
+  var panels='';
+  if(!q||internalList.length) panels+=renderAgentDirPanel_('🟢',isZh_()?'内部坐席':'Internal CS','var(--green)',internalList);
+  if(!q||outsourceList.length) panels+=renderAgentDirPanel_('🟠',isZh_()?'外包坐席':'Outsource CS','var(--amber)',outsourceList);
+  if(q&&!internalList.length&&!outsourceList.length){
+    panels='<div class="ap-suggest-empty">'+(lang==='zh'?'没有匹配的坐席':'No matching agent')+'</div>';
+  }
+  container.innerHTML=panels;
 }
 function isZh_(){return lang==='zh';}
 
@@ -4346,7 +4391,6 @@ function openAgentProfile(key){
   apMonthFilter='all';
   var monthSel=document.getElementById('ap-month-sel');
   if(monthSel) monthSel.value='all';
-  var input=document.getElementById('ap-search-input'); if(input) input.value=dir[key].name;
   renderCurrentAgentProfile_();
 }
 
@@ -4413,7 +4457,7 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'PSD 编号':'PSD ID')+'</span><b>'+(identity.psdId||'—')+'</b></div>'+
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'团队':'CS')+'</span><b>'+teamLbl+'</b></div>'+
       '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'项目':'Project')+'</span><b>'+(profile&&profile.project?profile.project:'—')+'</b></div>'+
-      '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'表现':'Performance')+'</span><b style="color:'+perfColor+'">'+(profile&&profile.performance?profile.performance:'—')+'</b></div>'+
+      '<div class="ap-text-info-line"><span class="ap-text-info-lbl">'+(isZh?'表现':'Performance')+'</span><b style="color:'+perfColor+'">'+(profile&&profile.performance?translatePerformance_(profile.performance,isZh):'—')+'</b></div>'+
     '</div>';
 
   var headerLeft=
@@ -4438,8 +4482,8 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
     '<span style="color:var(--muted);font-size:11px">—</span>';
   var cellRow=
     '<div class="ap-cellrow">'+
-      '<div class="ap-cell"><div class="ap-cell-lbl">'+(isZh?'任务列表 · TASK LIST':'TASK LIST')+'</div>'+taskListHtml+'</div>'+
-      '<div class="ap-cell"><div class="ap-cell-lbl">'+(isZh?'备注 · REMARK':'REMARK')+'</div>'+remarkListHtml+'</div>'+
+      '<div class="ap-cell"><div class="ap-cell-lbl">'+(isZh?'任务列表':'TASK LIST')+'</div>'+taskListHtml+'</div>'+
+      '<div class="ap-cell"><div class="ap-cell-lbl">'+(isZh?'备注':'REMARK')+'</div>'+remarkListHtml+'</div>'+
     '</div>';
 
   var profileHint=profile?'':'<div style="font-size:10px;color:var(--dim);margin-top:12px;font-style:italic">'+(isZh?'（该坐席在 "CS Detail" 表中未匹配到记录 — 请检查 PSD-ID / 姓名拼写是否一致）':'(no matching row found in the "CS Detail" sheet for this agent — check PSD-ID / name spelling)')+'</div>';
@@ -4460,9 +4504,9 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
   var kpi=
     '<div class="kpi-grid g6" style="margin-bottom:18px">'+
       '<div class="kpi c-teal"><div class="kpi-lbl">'+(isZh?'总接单量':'Total Chats')+'</div><div class="kpi-val">'+fn(slaAgg.totalChats)+'</div></div>'+
-      '<div class="kpi c-purple"><div class="kpi-lbl">'+(isZh?'平均首响':'Avg FRT')+'</div><div class="kpi-val">'+(slaAgg.avgFrt||'—')+'</div></div>'+
-      '<div class="kpi c-purple"><div class="kpi-lbl">'+(isZh?'平均回复':'Avg MRT')+'</div><div class="kpi-val">'+(slaAgg.avgMrt||'—')+'</div></div>'+
-      '<div class="kpi c-amber"><div class="kpi-lbl">'+(isZh?'平均处理':'Avg AHT')+'</div><div class="kpi-val">'+(slaAgg.avgAht||'—')+'</div></div>'+
+      '<div class="kpi c-purple"><div class="kpi-lbl">'+(isZh?'平均首响':'Avg FRT')+'</div><div class="kpi-val">'+(slaAgg.avgFrt?fmtMinSec_(slaAgg.avgFrt):'—')+'</div></div>'+
+      '<div class="kpi c-purple"><div class="kpi-lbl">'+(isZh?'平均回复':'Avg MRT')+'</div><div class="kpi-val">'+(slaAgg.avgMrt?fmtMinSec_(slaAgg.avgMrt):'—')+'</div></div>'+
+      '<div class="kpi c-amber"><div class="kpi-lbl">'+(isZh?'平均处理':'Avg AHT')+'</div><div class="kpi-val">'+(slaAgg.avgAht?fmtMinSec_(slaAgg.avgAht):'—')+'</div></div>'+
       '<div class="kpi c-green"><div class="kpi-lbl">'+(isZh?'平均CSAT':'Avg CSAT')+'</div><div class="kpi-val">'+(slaAgg.avgCsat?slaAgg.avgCsat.toFixed(1):'—')+'</div></div>'+
       '<div class="kpi c-red"><div class="kpi-lbl">'+(isZh?'QA错误数':'QA Errors')+'</div><div class="kpi-val">'+qaEntries.length+'</div></div>'+
     '</div>';
@@ -4508,7 +4552,7 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
         labels:slaAgg.monthly.map(function(m){return m.month;}),
         datasets:[
           {type:'bar',label:isZh?'接单量':'Chats',data:slaAgg.monthly.map(function(m){return m.chats;}),backgroundColor:'rgba(0,176,255,0.65)',borderRadius:3,yAxisID:'y'},
-          {type:'line',label:'FRT',data:slaAgg.monthly.map(function(m){return m.frt;}),borderColor:'#9b7ff4',backgroundColor:'#9b7ff4',tension:.35,pointRadius:3,borderWidth:2,fill:false,yAxisID:'y1'}
+          {type:'line',label:isZh?'首响':'FRT',data:slaAgg.monthly.map(function(m){return m.frt;}),borderColor:'#9b7ff4',backgroundColor:'#9b7ff4',tension:.35,pointRadius:3,borderWidth:2,fill:false,yAxisID:'y1'}
         ]
       },
       options:{
@@ -4551,7 +4595,7 @@ function zoomPanel(kind,sourceId,title,tag){
   if(kind==='table'){
     var srcTbl=document.getElementById(sourceId);
     body.innerHTML='<table class="dt">'+(srcTbl?srcTbl.innerHTML:'')+'</table>';
-    foot.textContent='Press ESC or click outside to close';
+    foot.textContent=T[lang].zoomEscHint||'Press ESC or click outside to close';
   } else if(kind==='chart'){
     var srcChart=charts[sourceId];
     if(!srcChart){
@@ -4572,7 +4616,7 @@ function zoomPanel(kind,sourceId,title,tag){
         options:clonedOptions
       });
     }
-    foot.textContent='Press ESC or click outside to close';
+    foot.textContent=T[lang].zoomEscHint||'Press ESC or click outside to close';
   }
 
   overlay.classList.add('open');
