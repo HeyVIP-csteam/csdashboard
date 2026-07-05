@@ -75,7 +75,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 .conn-sub{font-size:9px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
 .lang-btn{width:100%;margin-top:8px;background:var(--purple-d);border:1px solid rgba(155,127,244,0.25);color:var(--purple);font-size:10px;font-weight:700;padding:7px;border-radius:7px;cursor:pointer;font-family:var(--mono);transition:opacity .15s}
 .lang-btn:hover{opacity:.8}
- 
+
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99;opacity:0;transition:opacity .2s}
 .hamburger-btn{display:none;background:var(--card);border:1px solid var(--border2);color:var(--text);width:34px;height:34px;border-radius:8px;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:14px}
 .hamburger-btn:hover{border-color:var(--purple);color:var(--purple)}
@@ -972,9 +972,10 @@ var REGION_CONFIG={
       daily:'Daily Chat Report!A1:N5000',
       qa:'QA Error Diagnostics!A1:U1000',
       slaOut:'Outsource SLA Metrics!A1:AD300',
-      profile:'CS Detail!A1:S500'
+      profile:'CS Detail!A1:S500',
+      slaRemarks:'SLA Remarks!A1:G2000'
     },
-    tabNames:['Daily Chat Report','CX Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail'],
+    tabNames:['Daily Chat Report','CX Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['CX','MP','BJ','BV','Welcome'],
     brandLabels:{CX:'CX',MP:'MP',BJ:'BJ',BV:'BV',Welcome:'Welcome/Jwy'},
     brandColors:{CX:'#00b0ff',MP:'#9b7ff4',BJ:'#00e676',BV:'#ff9100',Welcome:'#ff4081'},
@@ -989,9 +990,10 @@ var REGION_CONFIG={
       daily:'Daily Chat Report!A1:AB5000',
       qa:'QA Error Diagnostics!A1:U1000',
       slaOut:'Outsource SLA Metrics!A1:AD300',
-      profile:'CS Detail!A1:S500' // PLACEHOLDER — update once the PKR sheet/tab is uploaded
+      profile:'CS Detail!A1:S500', // PLACEHOLDER — update once the PKR sheet/tab is uploaded
+      slaRemarks:'SLA Remarks!A1:G2000'
     },
-    tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail'],
+    tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['CX','MP','BJ','JW','DP','KV8','HB','SBJ','SP'],
     brandLabels:{CX:'CX',MP:'MP',BJ:'BJ',JW:'JW',DP:'DP',KV8:'KV8',HB:'HB',SBJ:'SBJ',SP:'SP'},
     brandColors:{CX:'#00b0ff',MP:'#9b7ff4',BJ:'#00e676',JW:'#ff4081',DP:'#ff9100',KV8:'#2dd4bf',HB:'#facc15',SBJ:'#f472b6',SP:'#60a5fa'},
@@ -1005,9 +1007,10 @@ var REGION_CONFIG={
       daily:'Daily Chat Report!A1:AB5000',
       qa:'QA Error Diagnostics!A1:U1000',
       slaOut:'Outsource SLA Metrics!A1:AD300', // tab exists but is currently empty — UI auto-hides Outsource panels until data appears
-      profile:'CS Detail!A1:S500'
+      profile:'CS Detail!A1:S500',
+      slaRemarks:'SLA Remarks!A1:G2000'
     },
-    tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail'],
+    tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['BJ','BV'],
     brandLabels:{BJ:'BJ',BV:'BV'},
     brandColors:{BJ:'#00e676',BV:'#ff9100'},
@@ -1477,8 +1480,8 @@ function refreshClick(){
 function loadAll(){
   setSt('loading');
   var cfg=REGION_CONFIG[currentRegion];
-  var keys=['sla','daily','qa','slaOut','profile'];
-  var ranges=[cfg.ranges.sla,cfg.ranges.daily,cfg.ranges.qa,cfg.ranges.slaOut,cfg.ranges.profile];
+  var keys=['sla','daily','qa','slaOut','profile','slaRemarks'];
+  var ranges=[cfg.ranges.sla,cfg.ranges.daily,cfg.ranges.qa,cfg.ranges.slaOut,cfg.ranges.profile,cfg.ranges.slaRemarks];
   var promises=ranges.map(function(range,idx){
     if(!range){ raw[keys[idx]]=[]; return Promise.resolve(); }
     return fetch_(range).then(function(r){
@@ -1492,6 +1495,7 @@ function loadAll(){
     internalRoster=buildAgentRoster_(raw.sla);
     outsourceRoster=buildAgentRoster_(raw.slaOut);
     AGENT_PROFILE_DATA=parseAgentProfileSheet(raw.profile);
+    slaRemarksMap=buildSlaRemarksMap_(raw.slaRemarks);
     renderAll();
     if(document.getElementById('page-audit-profile')&&document.getElementById('page-audit-profile').classList.contains('active')) apFilterDirectoryGrid();
     setSt('ok');
@@ -1500,6 +1504,116 @@ function loadAll(){
     setSt('err','Unexpected error: '+e.message);
     throw e;
   });
+}
+
+// ── SLA WEEKLY REMARKS (one note per Agent+Month+Week, shown inline in each
+// week row inside the expanded Agent SLA Performance table). Stored in the
+// "SLA Remarks" tab of the active region's sheet:
+//   A=Team  B=Agent  C=Month  D=Week  E=Remark  F=Updated By  G=Updated At
+// Read via the public API key like everything else; writing requires Google
+// sign-in (reuses the same OAuth token client as the avatar upload feature) ──
+var slaRemarksMap={};
+function safeId_(s){ return String(s).replace(/[^a-zA-Z0-9]/g,'_'); }
+function slaRemarkKey_(team,agent,month,week){ return String(team)+'||'+String(agent)+'||'+String(month)+'||'+String(week); }
+function buildSlaRemarksMap_(rows){
+  var map={};
+  (rows||[]).forEach(function(row,idx){
+    if(idx===0) return; // header row
+    var team=String((row&&row[0])||'').trim();
+    var agent=String((row&&row[1])||'').trim();
+    var month=String((row&&row[2])||'').trim();
+    var week=String((row&&row[3])||'').trim();
+    if(!agent||!month||!week) return;
+    map[slaRemarkKey_(team,agent,month,week)]={
+      text:String((row&&row[4])||''),
+      updatedBy:String((row&&row[5])||''),
+      updatedAt:String((row&&row[6])||''),
+      rowNum:idx+1 // 1-based sheet row number (idx 0 = header = row 1)
+    };
+  });
+  return map;
+}
+// Toggle the inline edit box under one week row open/closed
+function toggleSlaWeekRemark_(wrid,team,agent,month,week){
+  var box=document.getElementById(wrid+'-edit');
+  if(!box) return;
+  var isOpen=box.style.display!=='none';
+  if(isOpen){ box.style.display='none'; return; }
+  var entry=slaRemarksMap[slaRemarkKey_(team,agent,month,week)];
+  var ta=document.getElementById(wrid+'-text');
+  var meta=document.getElementById(wrid+'-meta');
+  if(ta) ta.value=entry?entry.text:'';
+  if(meta) meta.textContent=(entry&&entry.updatedAt)?((lang==='zh'?'最后更新：':'Last updated: ')+entry.updatedAt+(entry.updatedBy?(' · '+entry.updatedBy):'')):(lang==='zh'?'暂无备注':'No remark yet');
+  box.style.display='block';
+}
+function saveSlaWeekRemark_(wrid,team,agent,month,week){
+  var ta=document.getElementById(wrid+'-text');
+  var btn=document.getElementById(wrid+'-savebtn');
+  if(!ta) return;
+  var text=ta.value;
+  if(btn){ btn.disabled=true; btn.textContent=(lang==='zh'?'登录中…':'Signing in…'); }
+  apRequestToken_(function(token){
+    if(btn) btn.textContent=(lang==='zh'?'保存中…':'Saving…');
+    doSaveSlaWeekRemark_(text,token,team,agent,month,week,wrid,btn);
+  });
+}
+function doSaveSlaWeekRemark_(text,token,team,agent,month,week,wrid,btn){
+  var cfg=REGION_CONFIG[currentRegion];
+  var tabName=(cfg.ranges.slaRemarks||'SLA Remarks!A1:G2000').split('!')[0];
+  var key=slaRemarkKey_(team,agent,month,week);
+  var entry=slaRemarksMap[key];
+  var savedWho='';
+  try{ savedWho=localStorage.getItem('slaRemarkAuthor')||''; }catch(e){}
+  var who=prompt(lang==='zh'?'请输入你的名字/工号（会显示在备注旁边）：':'Enter your name/initials (shown next to the remark):',savedWho);
+  var resetBtn=function(){ if(btn){ btn.disabled=false; btn.textContent='💾 '+(lang==='zh'?'保存':'Save'); } };
+  if(who===null){ resetBtn(); return; } // user cancelled the prompt
+  who=who||savedWho||'—';
+  try{ localStorage.setItem('slaRemarkAuthor',who); }catch(e){}
+  var now=new Date().toLocaleString();
+
+  var finish=function(ok,err){
+    resetBtn();
+    if(ok){
+      slaRemarksMap[key]={text:text,updatedBy:who,updatedAt:now,rowNum:entry?entry.rowNum:(slaRemarksMap[key]&&slaRemarksMap[key].rowNum)};
+      // Refresh this row's preview text + meta + close the editor
+      var preview=document.getElementById(wrid+'-preview');
+      if(preview){
+        preview.textContent=text?(text.length>28?text.slice(0,28)+'…':text):'—';
+        preview.title=text||'';
+      }
+      var icon=document.getElementById(wrid+'-icon');
+      if(icon) icon.style.color=text?'var(--purple)':'var(--muted)';
+      var meta=document.getElementById(wrid+'-meta');
+      if(meta) meta.textContent=(lang==='zh'?'✓ 已保存 · ':'✓ Saved · ')+now+' · '+who;
+      var box=document.getElementById(wrid+'-edit');
+      if(box) setTimeout(function(){ box.style.display='none'; },900);
+    } else {
+      alert((lang==='zh'?'保存失败：':'Save failed: ')+(err||'unknown error'));
+    }
+  };
+
+  if(entry&&entry.rowNum){
+    var range=tabName+'!E'+entry.rowNum+':G'+entry.rowNum;
+    var url='https://sheets.googleapis.com/v4/spreadsheets/'+cfg.sheetId+'/values/'+encodeURIComponent(range)+'?valueInputOption=RAW';
+    fetch(url,{method:'PUT',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({values:[[text,who,now]]})})
+      .then(function(r){return r.json();})
+      .then(function(resp){ if(resp&&resp.error) throw new Error(resp.error.message); finish(true); })
+      .catch(function(e){ finish(false,e.message); });
+  } else {
+    var appendUrl='https://sheets.googleapis.com/v4/spreadsheets/'+cfg.sheetId+'/values/'+encodeURIComponent(tabName+'!A1:G1')+':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS';
+    fetch(appendUrl,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({values:[[team,agent,month,week,text,who,now]]})})
+      .then(function(r){return r.json();})
+      .then(function(resp){
+        if(resp&&resp.error) throw new Error(resp.error.message);
+        // Re-fetch just this tab so the new row's exact sheet row number is known for future edits
+        return fetch_(cfg.ranges.slaRemarks).then(function(rows){
+          raw.slaRemarks=rows;
+          slaRemarksMap=buildSlaRemarksMap_(rows);
+          finish(true);
+        });
+      })
+      .catch(function(e){ finish(false,e.message); });
+  }
 }
 
 // ── AGENT ROSTER (used by 'roster' internalMode regions like PKR to tell Internal
@@ -2866,12 +2980,15 @@ function buildSlaMonthlyRows(agentName,parentRid,team){
 function buildSlaWeeklyRows(agentName,month,team){
   if(!slaParsed||!slaParsed.months||!slaParsed.months[month]) return '<div style="color:var(--muted);font-size:11px;padding:8px 0">No weekly data available</div>';
   var monthData=slaParsed.months[month];
-  var key=(team||'CX')+'::'+agentName;
+  var teamVal=team||'CX';
+  var key=teamVal+'::'+agentName;
   var a=monthData.agents&&monthData.agents[key];
   if(!a) return '<div style="color:var(--muted);font-size:11px;padding:8px 0">No weekly data available</div>';
   var weekLabels=(monthData.weekLabels&&monthData.weekLabels.length)?monthData.weekLabels:['Week 1','Week 2','Week 3','Week 4'];
+  var safeName=agentName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  var teamSafe=teamVal.replace(/'/g,"\\'");
   var html='<div style="border:1px solid rgba(0,176,255,0.2);border-radius:7px;overflow:hidden;margin-top:8px;background:rgba(0,176,255,0.03)">'+
-    '<div style="display:grid;grid-template-columns:90px 90px 90px 90px 90px 80px 1fr;padding:6px 12px;background:rgba(0,176,255,0.08);border-bottom:1px solid rgba(0,176,255,0.15)">'+
+    '<div style="display:grid;grid-template-columns:90px 90px 90px 90px 90px 80px 90px 1fr;padding:6px 12px;background:rgba(0,176,255,0.08);border-bottom:1px solid rgba(0,176,255,0.15)">'+
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--teal)">Week</span>'+
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Chats</span>'+
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">FRT</span>'+
@@ -2879,6 +2996,7 @@ function buildSlaWeeklyRows(agentName,month,team){
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">AHT</span>'+
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">CSAT</span>'+
       '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Status</span>'+
+      '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Remark</span>'+
     '</div>'+
     weekLabels.map(function(lbl,wi){
       var wd=(a.weeks&&a.weeks[wi])||{};
@@ -2889,7 +3007,13 @@ function buildSlaWeeklyRows(agentName,month,team){
       var ahtOk=aht>0&&aht<=360;
       var overCount=(frtOk?0:1)+(mrtOk?0:1)+(ahtOk?0:1);
       var isLast=wi===weekLabels.length-1;
-      return '<div style="display:grid;grid-template-columns:90px 90px 90px 90px 90px 80px 1fr;align-items:center;padding:7px 12px;'+(isLast?'':'border-bottom:1px solid rgba(255,255,255,0.04);')+(!hasData?'opacity:.5':'')+'">'+
+      var weekNum=String(wi+1);
+      var wrid='wk_'+safeId_(teamVal)+'_'+safeId_(agentName)+'_'+safeId_(month)+'_'+weekNum;
+      var remEntry=slaRemarksMap[slaRemarkKey_(teamVal,agentName,month,weekNum)];
+      var remText=remEntry?remEntry.text:'';
+      var remPreview=remText?(remText.length>28?remText.slice(0,28)+'…':remText):'—';
+      return '<div>'+
+        '<div style="display:grid;grid-template-columns:90px 90px 90px 90px 90px 80px 90px 1fr;align-items:center;padding:7px 12px;'+(isLast?'':'border-bottom:1px solid rgba(255,255,255,0.04);')+(!hasData?'opacity:.5':'')+'">'+
         '<span style="color:var(--text);font-weight:700;font-size:11px">'+lbl+'</span>'+
         '<span style="color:var(--muted);font-size:11px">'+(chats>0?fn(chats):'—')+'</span>'+
         '<span><span class="bdg '+(frt>0?(frtOk?'g':'r'):'t')+'">'+(frt>0?ft(frt):'—')+'</span></span>'+
@@ -2897,6 +3021,18 @@ function buildSlaWeeklyRows(agentName,month,team){
         '<span><span class="bdg '+(aht>0?(ahtOk?'g':'r'):'t')+'">'+(aht>0?ft(aht):'—')+'</span></span>'+
         '<span style="color:var(--muted);font-size:11px">'+(csat>0?csat.toFixed(2)+'%':'—')+'</span>'+
         '<span>'+(!hasData?'<span style="color:var(--dim);font-size:10px">— No Data</span>':(overCount===0?'<span class="bdg g">\u2713 Good</span>':overCount===1?'<span style="background:rgba(255,145,0,0.15);color:#ff9100;border:1px solid rgba(255,145,0,0.3);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">\u2713 Normal</span>':overCount===2?'<span class="bdg r">\u2717 Average</span>':'<span style="background:rgba(180,0,0,0.25);color:#ff1744;border:1px solid rgba(255,23,68,0.4);padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">\u2717 Bad</span>'))+'</span>'+
+        '<span style="display:flex;align-items:center;gap:6px;min-width:0">'+
+          '<span id="'+wrid+'-preview" title="'+remText.replace(/"/g,'&quot;')+'" style="color:'+(remText?'var(--text)':'var(--dim)')+';font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+remPreview+'</span>'+
+          '<button id="'+wrid+'-icon" onclick="event.stopPropagation();toggleSlaWeekRemark_(\''+wrid+'\',\''+teamSafe+'\',\''+safeName+'\',\''+month+'\',\''+weekNum+'\')" title="'+(lang==='zh'?'添加/编辑备注':'Add / edit remark')+'" style="background:none;border:none;cursor:pointer;font-size:12px;color:'+(remText?'var(--purple)':'var(--muted)')+';flex-shrink:0;padding:2px">📝</button>'+
+        '</span>'+
+        '</div>'+
+        '<div id="'+wrid+'-edit" style="display:none;padding:10px 12px 12px;background:rgba(155,127,244,0.05);border-top:1px dashed rgba(155,127,244,0.25)">'+
+          '<textarea id="'+wrid+'-text" rows="2" placeholder="e.g. Genie is still experiencing some errors. Our team is actively following up with the concerned team to resolve the issue as soon as possible." style="width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:7px;color:var(--text);padding:8px;font-family:var(--font);font-size:11px;line-height:1.5;resize:vertical"></textarea>'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;flex-wrap:wrap;gap:6px">'+
+            '<span id="'+wrid+'-meta" style="font-size:10px;color:var(--muted);font-family:var(--mono)">—</span>'+
+            '<button id="'+wrid+'-savebtn" onclick="event.stopPropagation();saveSlaWeekRemark_(\''+wrid+'\',\''+teamSafe+'\',\''+safeName+'\',\''+month+'\',\''+weekNum+'\')" style="background:var(--purple-d);border:1px solid rgba(155,127,244,0.3);color:var(--purple);font-size:10px;font-weight:700;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:var(--font)">\ud83d\udcbe '+(lang==='zh'?'保存':'Save')+'</button>'+
+          '</div>'+
+        '</div>'+
       '</div>';
     }).join('')+
     '</div>';
