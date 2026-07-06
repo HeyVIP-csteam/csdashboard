@@ -25,7 +25,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
 .app{display:flex;min-height:100vh}
- 
+
 /* SIDEBAR */
 .sidebar{width:var(--sidebar);background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto}
 .sb-logo{padding:16px;display:flex;flex-direction:column;gap:2px;position:relative;overflow:hidden}
@@ -439,6 +439,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
   <div class="nav-sec" data-i18n="performance">Agent Performance</div>
   <div class="nav-item" onclick="showPage('sla',this)"><div class="nav-dot" style="background:#00e676"></div><span>SLA Metrics</span></div>
   <div class="nav-item" onclick="showPage('qa',this)"><div class="nav-dot" style="background:#ff4081"></div><span data-i18n="qaErrors">QA Errors</span></div>
+  <div class="nav-item" onclick="showPage('attendance',this)"><div class="nav-dot" style="background:#2dd4bf"></div><span>Attendance</span></div>
   <div class="nav-sec" data-i18n="auditSec">Audit</div>
   <div class="nav-item" onclick="showAuditDomain('agentbot',this)"><div class="nav-dot" style="background:#9b7ff4"></div><span data-i18n="auditAgentBot">Agent & Bot</span></div>
   <div class="nav-item" onclick="showAuditDomain('agentprofile',this)"><div class="nav-dot" style="background:#ffd54f"></div><span data-i18n="auditAgentProfile">Agent Audit Profile</span></div>
@@ -903,6 +904,86 @@ body.light select option{background:#ffffff;color:#0c1e35}
       </div>
     </div>
 
+    <!-- ATTENDANCE (Internal CS only -- Outsource attendance isn't tracked) -->
+    <div class="page" id="page-attendance">
+      <div style="display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 16px;flex-wrap:wrap">
+        <div class="filter-group"><span class="filter-lbl">Month</span>
+        <select class="fsel" id="att-month" onchange="applyAttendanceFilters()">
+          <option value="all">All Months</option>
+          <option value="H1">H1 Jan-Jun</option>
+          <option value="H2">H2 Jul-Dec</option>
+          <option value="Jan">January</option><option value="Feb">February</option><option value="Mar">March</option>
+          <option value="Apr">April</option><option value="May">May</option><option value="Jun">June</option>
+          <option value="Jul">July</option><option value="Aug">August</option><option value="Sep">September</option>
+          <option value="Oct">October</option><option value="Nov">November</option><option value="Dec">December</option>
+        </select></div>
+        <div class="filter-div"></div>
+        <div class="filter-group"><span class="filter-lbl">Agent</span>
+        <select class="fsel" id="att-agent" onchange="applyAttendanceFilters()">
+          <option value="all">All Agents</option>
+        </select></div>
+        <div class="filter-div"></div>
+        <span class="filter-info" id="att-filter-info">All Months</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted);font-family:var(--mono)">Internal CS only -- Outsource attendance isn't tracked</span>
+      </div>
+
+      <div id="att-empty" class="ap-noprofile" style="display:none">No attendance data loaded for this region yet -- check REGION_CONFIG's attendanceSheetId.</div>
+
+      <div id="att-body">
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="kpi c-teal"><div class="kpi-lbl">Attendance Rate</div><div class="kpi-val" id="att-attrate">-</div><div class="kpi-d" id="att-attrate-d">Days present / days in month</div></div>
+          <div class="kpi c-green"><div class="kpi-lbl">Punctuality Rate</div><div class="kpi-val" id="att-punc">-</div><div class="kpi-d" id="att-punc-d">On-time / days present</div></div>
+          <div class="kpi c-purple"><div class="kpi-lbl">Avg Work Duration</div><div class="kpi-val" id="att-avgwork">-</div><div class="kpi-d">Per day present</div></div>
+          <div class="kpi c-amber"><div class="kpi-lbl">Days Off (Total)</div><div class="kpi-val" id="att-off">-</div><div class="kpi-d">6/month entitled -- not "absent"</div></div>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+          <div class="kpi c-amber"><div class="kpi-lbl">Late Check-In</div><div class="kpi-val" id="att-late">-</div><div class="kpi-d" id="att-late-d">- min total</div></div>
+          <div class="kpi c-red"><div class="kpi-lbl">Early Check-Out</div><div class="kpi-val" id="att-early">-</div><div class="kpi-d" id="att-early-d">- min total</div></div>
+          <div class="kpi c-red"><div class="kpi-lbl">Extra Break (over 90min/day)</div><div class="kpi-val" id="att-extra">-</div><div class="kpi-d" id="att-extra-d">- min total over allowance</div></div>
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <div class="ph" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div class="ph-t">Attendance -- Internal CS</div>
+            <input id="att-search" type="text" placeholder="Search name or PSD-ID..." oninput="renderAttendanceTable()" style="background:var(--bg);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:6px 10px;border-radius:6px;width:180px;font-family:var(--font)">
+          </div>
+          <div style="overflow-x:auto">
+            <table class="dt" id="att-tbl">
+              <thead><tr>
+                <th data-key="psdId">PSD-ID</th><th data-key="name">Name</th>
+                <th data-key="daysPresent">Days Present</th><th data-key="daysOff">Days Off</th><th data-key="attendanceRate">Attendance %</th>
+                <th data-key="lateCount">Late (count)</th><th data-key="lateMinTotal">Late (min)</th>
+                <th data-key="earlyCount">Early Out (count)</th><th data-key="earlyMinTotal">Early Out (min)</th>
+                <th data-key="extraBreakDays">Extra Break (days)</th><th data-key="extraBreakMinTotal">Extra Break (min)</th>
+                <th data-key="shortBreakCountTotal">Short Break (count)</th><th data-key="avgWorkDurationMin">Avg Work</th>
+                <th data-key="remarkCount">Remarks</th>
+              </tr></thead>
+              <tbody id="att-body-tbl"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Daily Records -- raw Check In/Out (and Remark) per day, straight from the sheet.
+             Only makes sense for one agent at a time, so it only fills in once
+             a specific agent is picked in the Agent dropdown above. -->
+        <div class="panel" style="margin-top:14px;border-left:3px solid var(--teal)">
+          <div class="ph" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div class="ph-t">📅 Daily Records</div>
+            <span class="ph-tag" id="att-daily-count">—</span>
+          </div>
+          <div style="overflow:auto;max-height:420px">
+            <table class="dt" id="att-daily-tbl">
+              <thead><tr>
+                <th>Date</th><th>Shift</th><th>Check In</th><th>Late Check-In</th><th>Check Out</th><th>Early Check-Out</th>
+                <th>Work Duration</th><th>Total Break</th><th>Remark</th>
+              </tr></thead>
+              <tbody id="att-daily-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- AUDIT -->
     <div class="page" id="page-audit">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -996,13 +1077,20 @@ body.light select option{background:#ffffff;color:#0c1e35}
 var REGION_CONFIG={
   INR:{
     sheetId:'1oYi7K7dZ5H28J8ziDA2alTPQYxds5bAM3APVvgNwfBg',
+    // Attendance lives in a SEPARATE Google Sheet file (its own doc, e.g. "INR
+    // Attendance Report 2026") — not a tab inside the main CS sheet above — so
+    // it needs its own sheetId. PASTE the real ID (the string in the sheet's
+    // URL between /d/ and /edit) here once you have it; until then this stays
+    // a placeholder and the Attendance page/section just shows no data.
+    attendanceSheetId:'1OsePdK4ZnfbIEKFWLr23uGlJIUE7yFDvSgn3lHGI3Do',
     ranges:{
       sla:'CX Internal SLA Metrics!A1:AD300',
       daily:'Daily Chat Report!A1:N5000',
       qa:'QA Error Diagnostics!A1:U1000',
       slaOut:'Outsource SLA Metrics!A1:AD300',
-      profile:'CS Detail!A1:S500',
-      slaRemarks:'SLA Remarks!A1:G2000'
+      profile:'CS Detail!A1:AF500',
+      slaRemarks:'SLA Remarks!A1:G2000',
+      attendance:'Attendance Report!A1:Q20000' // confirm this matches the real tab name at the bottom of the Attendance sheet
     },
     tabNames:['Daily Chat Report','CX Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['CX','MP','BJ','BV','Welcome'],
@@ -1014,13 +1102,17 @@ var REGION_CONFIG={
   },
   PKR:{
     sheetId:'1ozf4pUIrjqrItxMb9gd9Nli6UPGCJ7werPc5bJchKMU',
+    // Attendance not wired up for PKR yet — INR ships first, then this gets
+    // the same treatment (its own Attendance Sheet ID + range) once ready.
+    attendanceSheetId:'',
     ranges:{
       sla:'Internal SLA Metrics!A1:AD300',
       daily:'Daily Chat Report!A1:AB5000',
       qa:'QA Error Diagnostics!A1:U1000',
       slaOut:'Outsource SLA Metrics!A1:AD300',
-      profile:'CS Detail!A1:S500', // PLACEHOLDER — update once the PKR sheet/tab is uploaded
-      slaRemarks:'SLA Remarks!A1:G2000'
+      profile:'CS Detail!A1:AF500', // widened past S so a fuller Outsource block (Project/Position/Performance/Task/Remark/Status) isn't truncated
+      slaRemarks:'SLA Remarks!A1:G2000',
+      attendance:''
     },
     tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['CX','MP','BJ','JW','DP','KV8','HB','SBJ','SP'],
@@ -1031,13 +1123,16 @@ var REGION_CONFIG={
   },
   PHP:{
     sheetId:'1axIS9xBWuG54xDe4FqP5R1h4WRMXtJEXhKPvDqg-djA',
+    // Attendance not wired up for PHP yet — see PKR note above.
+    attendanceSheetId:'',
     ranges:{
       sla:'Internal SLA Metrics!A1:AD300',
       daily:'Daily Chat Report!A1:AB5000',
       qa:'QA Error Diagnostics!A1:U1000',
       slaOut:'Outsource SLA Metrics!A1:AD300', // tab exists but is currently empty — UI auto-hides Outsource panels until data appears
-      profile:'CS Detail!A1:S500',
-      slaRemarks:'SLA Remarks!A1:G2000'
+      profile:'CS Detail!A1:AF500',
+      slaRemarks:'SLA Remarks!A1:G2000',
+      attendance:''
     },
     tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['BJ','BV'],
@@ -1101,6 +1196,7 @@ var qaM='Jan';
 var qaMonth='all';
 var qaAgent='all';
 var slaParsed=null;
+var attParsed=null;
 var slaMonth='all';
 var slaWeek='all';
 var slaAgent='all';
@@ -1164,8 +1260,8 @@ function filterVolData(d){
   });
 }
 
-var PAGES={overview:'Overview',daily:'Daily Report',sla:'SLA Metrics',peaks:'Peaks & Valleys',auto:'Automation Containment',qa:'QA Error Diagnostics',audit:'Agent & Bot',"audit-profile":'Agent Audit Profile'};
-var PAGES_ZH={overview:'总览',daily:'每日报告',sla:'SLA 指标',peaks:'峰值谷值',auto:'自动化遏制率',qa:'QA 错误诊断',audit:'人工与机器人',"audit-profile":'坐席审计档案'};
+var PAGES={overview:'Overview',daily:'Daily Report',sla:'SLA Metrics',peaks:'Peaks & Valleys',auto:'Automation Containment',qa:'QA Error Diagnostics',attendance:'Attendance',audit:'Agent & Bot',"audit-profile":'Agent Audit Profile'};
+var PAGES_ZH={overview:'总览',daily:'每日报告',sla:'SLA 指标',peaks:'峰值谷值',auto:'自动化遏制率',qa:'QA 错误诊断',attendance:'考勤',audit:'人工与机器人',"audit-profile":'坐席审计档案'};
 var PAGE_SUB={
   overview:'🏠 Live health check · Trends, no fixed targets · Internal + Outsource combined',
   daily:'📅 Day-by-day Agent vs Bot breakdown · Drill into any month',
@@ -1173,6 +1269,7 @@ var PAGE_SUB={
   peaks:'📈 Agent chat volume trends · Weekly & Monthly by Brand',
   auto:'🤖 Bot vs Agent volume · Containment rate by brand & month',
   qa:'🔴 Error counts by category · Internal vs Outsource',
+  attendance:'🕒 Check-in/out, late, early-out & break compliance · Internal CS only',
   audit:'📊 Period-over-period comparison · Agent vs Agent · Bot vs Bot',
   "audit-profile":'🪪 Search any agent · Info, SLA, QA Errors & Handled Chats in one profile'
 };
@@ -1183,6 +1280,7 @@ var PAGE_SUB_ZH={
   peaks:'📈 人工坐席聊天量趋势 · 按品牌周度/月度分析',
   auto:'🤖 机器人 vs 人工量 · 各品牌/月份遏制率',
   qa:'🔴 各类错误数量统计 · 内部 vs 外包',
+  attendance:'🕒 打卡、迟到、早退与休息合规 · 仅限内部坐席',
   audit:'📊 周期对比分析 · 人工对人工 · 机器人对机器人',
   "audit-profile":'🪪 搜索坐席 · 一个面板看信息/SLA/QA错误/接单量'
 };
@@ -1394,7 +1492,7 @@ function toggleLang(){
   // Update active page title
   var activeNav=document.querySelector('.nav-item.active');
   if(activeNav){
-    var pageId=['overview','daily','sla','peaks','auto','qa','audit','audit-profile'].find(function(id){
+    var pageId=['overview','daily','sla','peaks','auto','qa','attendance','audit','audit-profile'].find(function(id){
       return document.getElementById('page-'+id)&&document.getElementById('page-'+id).classList.contains('active');
     });
     if(pageId){
@@ -1466,8 +1564,8 @@ function mkChart(id,type,labels,datasets,opts){
 function lDs(label,data,color,fill){return{label:label,data:data,borderColor:color,backgroundColor:fill?color.replace(')',',.1)').replace('rgb','rgba'):'transparent',fill:fill||false,tension:.4,pointRadius:3,pointBackgroundColor:color,borderWidth:2};}
 function bDs(label,data,color){return{label:label,data:data,backgroundColor:color,borderRadius:3,borderSkipped:false};}
 
-function fetch_(range){
-  return fetch(BASE+encodeURIComponent(range)+'?key='+API_KEY)
+function fetchFromSheet_(sheetId,range){
+  return fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(range)+'?key='+API_KEY)
     .then(function(r){
       if(r.status===403)throw new Error('403 Forbidden — Sheet must be shared as "Anyone with the link can view"');
       if(r.status===400)throw new Error('400 Bad Request — Check sheet name spelling and range');
@@ -1479,6 +1577,9 @@ function fetch_(range){
       return d.values||[];
     });
 }
+function fetch_(range){
+  return fetchFromSheet_(REGION_CONFIG[currentRegion].sheetId,range);
+}
 
 function refreshClick(){
   var btn=document.getElementById('refresh-btn');
@@ -1489,7 +1590,22 @@ function refreshClick(){
   btn.classList.add('st-loading');
   if(icon) icon.className='fa-solid fa-rotate-right';
   if(label) label.textContent=lang==='zh'?'加载中…':'Loading…';
+  // Watchdog: if loadAll() ever hangs or throws somewhere that doesn't reach
+  // its own .then()/.catch() (e.g. a bug in a render function called
+  // synchronously inside it), this guarantees the button still resets after
+  // 25s instead of staying stuck on "Loading…" forever and blocking every
+  // future click (the guard above only allows one refresh at a time).
+  var timedOut=false;
+  var watchdog=setTimeout(function(){
+    timedOut=true;
+    setSt('err',lang==='zh'?'刷新超时 — 请检查网络连接或稍后重试':'Refresh timed out — check your connection and try again');
+    btn.classList.remove('st-loading');
+    if(icon) icon.className='fa-solid fa-rotate-right';
+    if(label) label.textContent=lang==='zh'?'刷新':'Refresh';
+  },25000);
   loadAll().then(function(){
+    if(timedOut) return; // watchdog already reset the button; don't fight it
+    clearTimeout(watchdog);
     btn.classList.remove('st-loading');
     btn.classList.add('st-success');
     if(icon) icon.className='fa-solid fa-check';
@@ -1499,7 +1615,10 @@ function refreshClick(){
       if(icon) icon.className='fa-solid fa-rotate-right';
       if(label) label.textContent=lang==='zh'?'刷新':'Refresh';
     },3000);
-  }).catch(function(){
+  }).catch(function(e){
+    if(timedOut) return;
+    clearTimeout(watchdog);
+    console.error('Refresh failed:',e);
     btn.classList.remove('st-loading');
     if(icon) icon.className='fa-solid fa-rotate-right';
     if(label) label.textContent=lang==='zh'?'刷新':'Refresh';
@@ -1507,35 +1626,57 @@ function refreshClick(){
 }
 
 function loadAll(){
-  setSt('loading');
-  var cfg=REGION_CONFIG[currentRegion];
-  var keys=['sla','daily','qa','slaOut','profile','slaRemarks'];
-  var ranges=[cfg.ranges.sla,cfg.ranges.daily,cfg.ranges.qa,cfg.ranges.slaOut,cfg.ranges.profile,cfg.ranges.slaRemarks];
-  var promises=ranges.map(function(range,idx){
-    if(!range){ raw[keys[idx]]=[]; return Promise.resolve(); }
-    return fetch_(range).then(function(r){
-      raw[keys[idx]]=r;
-    }).catch(function(e){
-      console.warn('Failed:',range,e.message);
-      raw[keys[idx]]=[];
+  try{
+    setSt('loading');
+    var cfg=REGION_CONFIG[currentRegion];
+    var keys=['sla','daily','qa','slaOut','profile','slaRemarks','attendance'];
+    var ranges=[cfg.ranges.sla,cfg.ranges.daily,cfg.ranges.qa,cfg.ranges.slaOut,cfg.ranges.profile,cfg.ranges.slaRemarks,cfg.ranges.attendance];
+    // Attendance lives in its own Google Sheet file (separate sheetId) — everything
+    // else shares the region's main sheetId. A missing/placeholder attendanceSheetId
+    // just means no attendance data for this region yet (page/section stay empty,
+    // nothing errors out) — same "quietly skip" pattern already used for slaOut.
+    var sheetIds=[cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.attendanceSheetId];
+    var promises=ranges.map(function(range,idx){
+      var sid=sheetIds[idx];
+      if(!range||!sid||sid.indexOf('PASTE_')===0){ raw[keys[idx]]=[]; return Promise.resolve(); }
+      return fetchFromSheet_(sid,range).then(function(r){
+        raw[keys[idx]]=r;
+      }).catch(function(e){
+        console.warn('Failed:',range,e.message);
+        raw[keys[idx]]=[];
+      });
     });
-  });
+  }catch(syncErr){
+    // Something threw BEFORE we ever got to Promise.all (bad config, a bug in
+    // a helper called synchronously above, etc). Without this catch, that
+    // exception would escape loadAll() entirely instead of rejecting the
+    // promise refreshClick() is waiting on — which is exactly what left the
+    // Refresh button stuck on "Loading…" forever with no way to retry.
+    setSt('err','Unexpected error: '+syncErr.message);
+    return Promise.reject(syncErr);
+  }
   return Promise.all(promises).then(function(){
-    internalRoster=buildAgentRoster_(raw.sla);
-    outsourceRoster=buildAgentRoster_(raw.slaOut);
-    AGENT_PROFILE_DATA=parseAgentProfileSheet(raw.profile);
-    slaRemarksMap=buildSlaRemarksMap_(raw.slaRemarks);
-    renderAll();
-    if(document.getElementById('page-audit-profile')&&document.getElementById('page-audit-profile').classList.contains('active')) apFilterDirectoryGrid();
-    setSt('ok');
-    document.getElementById('last-upd').textContent=(lang==='zh'?'\u66f4\u65b0\u4e8e ':'Updated: ')+new Date().toLocaleTimeString();
-    // Default the export-month picker to the most recent month that actually has data
     try{
-      var expSel=document.getElementById('export-month-sel');
-      if(expSel&&slaParsed&&slaParsed.monthList&&slaParsed.monthList.length){
-        expSel.value=slaParsed.monthList[slaParsed.monthList.length-1];
-      }
-    }catch(e){}
+      internalRoster=buildAgentRoster_(raw.sla);
+      outsourceRoster=buildAgentRoster_(raw.slaOut);
+      AGENT_PROFILE_DATA=parseAgentProfileSheet(raw.profile);
+      slaRemarksMap=buildSlaRemarksMap_(raw.slaRemarks);
+      attParsed=parseAttendance(raw.attendance);
+      renderAll();
+      if(document.getElementById('page-audit-profile')&&document.getElementById('page-audit-profile').classList.contains('active')) apFilterDirectoryGrid();
+      setSt('ok');
+      document.getElementById('last-upd').textContent=(lang==='zh'?'更新于 ':'Updated: ')+new Date().toLocaleTimeString();
+      // Default the export-month picker to the most recent month that actually has data
+      try{
+        var expSel=document.getElementById('export-month-sel');
+        if(expSel&&slaParsed&&slaParsed.monthList&&slaParsed.monthList.length){
+          expSel.value=slaParsed.monthList[slaParsed.monthList.length-1];
+        }
+      }catch(e){}
+    }catch(renderErr){
+      setSt('err','Unexpected error: '+renderErr.message);
+      throw renderErr;
+    }
   }).catch(function(e){
     setSt('err','Unexpected error: '+e.message);
     throw e;
@@ -1579,7 +1720,7 @@ function downloadHtmlFile_(htmlStr,filename){
 // constants so they can be dropped into the generated file byte-for-byte,
 // regardless of quotes/backticks they contain ──────────────────────────────
 var REPORT_STYLE_CSS = "\n:root{\n  --bg: #0a0e14;\n  --bg-raised: #10151d;\n  --panel: #131a24;\n  --panel-2: #0d1219;\n  --border: #212b38;\n  --border-soft: #1a222d;\n  --text: #e8edf4;\n  --text-dim: #93a1b3;\n  --text-faint: #5c6b80;\n  --teal: #2bd4ac;\n  --teal-dim: rgba(43,212,172,0.13);\n  --amber: #f5a83c;\n  --amber-dim: rgba(245,168,60,0.14);\n  --red: #f2596f;\n  --red-dim: rgba(242,89,111,0.14);\n  --blue: #6f93ff;\n  --blue-dim: rgba(111,147,255,0.13);\n  --violet: #b18bf5;\n  --radius: 10px;\n  --sidebar-w: 400px;\n  --font-display: 'IBM Plex Sans', system-ui, sans-serif;\n  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;\n  --mode-icon: '\u2600\ufe0f';\n}\n[data-theme=\"light\"] {\n  --bg: #f4f7fc;\n  --bg-raised: #eaf0f6;\n  --panel: #ffffff;\n  --panel-2: #f8faff;\n  --border: #d0d9e6;\n  --border-soft: #e2e9f2;\n  --text: #1b2a41;\n  --text-dim: #3f5570;\n  --text-faint: #6a7e99;\n  --teal: #0f9d7a;\n  --teal-dim: rgba(15,157,122,0.13);\n  --amber: #b86b1f;\n  --amber-dim: rgba(184,107,31,0.14);\n  --red: #c94a5e;\n  --red-dim: rgba(201,74,94,0.14);\n  --blue: #4a7aff;\n  --blue-dim: rgba(74,122,255,0.13);\n  --mode-icon: '\ud83c\udf19';\n}\n*{box-sizing:border-box;}\nhtml,body{margin:0;padding:0;}\nbody{\n  background: var(--bg);\n  color: var(--text);\n  font-family: var(--font-display);\n  font-size: 14px;\n  line-height: 1.5;\n  -webkit-font-smoothing: antialiased;\n  transition: background 0.2s, color 0.2s;\n}\n::selection{ background: var(--teal); color:#04140f; }\n::-webkit-scrollbar{ width:10px; height:10px; }\n::-webkit-scrollbar-track{ background:transparent; }\n::-webkit-scrollbar-thumb{ background:#26313f; border-radius:8px; }\n::-webkit-scrollbar-thumb:hover{ background:#324055; }\n[data-theme=\"light\"] ::-webkit-scrollbar-thumb{ background:#b0c4db; }\n[data-theme=\"light\"] ::-webkit-scrollbar-thumb:hover{ background:#9aafc9; }\n\na { color: inherit; }\n\n/* ===== Top bar ===== */\n.topbar{\n  position: sticky; top:0; z-index:50;\n  display:flex; align-items:center; gap:16px;\n  padding: 12px 24px;\n  background: linear-gradient(180deg, #0d1320 0%, #0a0e14 100%);\n  border-bottom: 1px solid var(--border);\n  transition: background 0.2s, border-color 0.2s;\n}\n[data-theme=\"light\"] .topbar{\n  background: linear-gradient(180deg, #eaf0f6 0%, #f4f7fc 100%);\n}\n.topbar .brand{\n  display:flex; align-items:center; gap:10px;\n  font-weight:700; font-size:15px; letter-spacing:0.2px;\n  white-space:nowrap;\n}\n.brand .dot{\n  width:9px;height:9px;border-radius:50%;\n  background: var(--teal);\n  box-shadow: 0 0 0 3px var(--teal-dim);\n  flex-shrink:0;\n}\n.brand .sub{ color:var(--text-faint); font-weight:500; font-size:12px; }\n.topbar .spacer{ flex:1; }\n.global-search{\n  position:relative; width: 320px; max-width: 40vw;\n}\n.global-search input{\n  width:100%;\n  background: var(--panel-2);\n  border:1px solid var(--border);\n  color: var(--text);\n  padding: 8px 12px 8px 32px;\n  border-radius: 8px;\n  font-family: var(--font-mono);\n  font-size:12.5px;\n  outline:none;\n  transition: border-color .15s;\n}\n.global-search input:focus{ border-color: var(--blue); }\n.global-search svg{\n  position:absolute; left:10px; top:50%; transform:translateY(-50%);\n  width:14px;height:14px; color:var(--text-faint); pointer-events:none;\n}\n.global-results{\n  position:absolute; top:calc(100% + 6px); left:0; right:0;\n  background: var(--bg-raised); border:1px solid var(--border); border-radius:8px;\n  max-height: 360px; overflow-y:auto; display:none; z-index:60;\n  box-shadow: 0 12px 32px rgba(0,0,0,0.5);\n}\n.global-results.show{ display:block; }\n.gr-item{\n  padding:9px 12px; border-bottom:1px solid var(--border-soft); cursor:pointer;\n  display:flex; justify-content:space-between; align-items:center; gap:8px;\n}\n.gr-item:hover{ background: var(--panel); }\n.gr-item:last-child{ border-bottom:none; }\n.gr-name{ font-size:12.5px; font-weight:500; }\n.gr-meta{ font-size:11px; color:var(--text-faint); font-family:var(--font-mono); white-space:nowrap; }\n.gr-empty{ padding:14px 12px; color:var(--text-faint); font-size:12.5px; }\n\n/* theme toggle button */\n.theme-toggle {\n  background: var(--panel-2);\n  border: 1px solid var(--border);\n  border-radius: 8px;\n  padding: 6px 10px;\n  font-size: 18px;\n  line-height: 1;\n  cursor: pointer;\n  transition: background 0.2s, border-color 0.2s;\n}\n.theme-toggle:hover {\n  background: var(--panel);\n  border-color: var(--text-faint);\n}\n\n/* ===== Layout ===== */\n.layout{\n  display:flex; align-items:flex-start;\n  max-width: 1600px; margin:0 auto;\n}\n.sidebar{\n  width: var(--sidebar-w); flex-shrink:0;\n  position: sticky; top: 57px;\n  height: calc(100vh - 57px);\n  overflow-y:auto;\n  padding: 20px 16px 60px 24px;\n  border-right: 1px solid var(--border);\n}\n.main{\n  flex:1; min-width:0;\n  padding: 24px 28px 100px 28px;\n}\n\n/* ===== Cards ===== */\n.card{\n  background: var(--panel);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 16px 16px;\n  margin-bottom: 14px;\n}\n.card-title{\n  font-size: 11px; text-transform:uppercase; letter-spacing:0.09em;\n  color: var(--text-faint); font-weight:600; margin: 0 0 10px 0;\n  display:flex; align-items:center; gap:8px;\n}\n.card-title .line{ flex:1; height:1px; background:var(--border-soft); }\n.eyebrow-badge{\n  font-family: var(--font-mono); font-size:10px; padding:2px 6px; border-radius:4px;\n  background: var(--teal-dim); color:var(--teal); font-weight:600;\n}\n.exec-title{ font-size:19px; font-weight:700; margin:2px 0 4px 0; letter-spacing:-0.01em; }\n.exec-sub{ color:var(--text-dim); font-size:12.5px; margin-bottom: 16px; }\n.exec-para{ color: var(--text-dim); font-size:13px; line-height:1.65; }\n.exec-para strong{ color:var(--text); font-weight:600; }\n\n.obstacle-item, .change-item{\n  display:flex; gap:10px; align-items:flex-start; padding:8px 0;\n  border-bottom: 1px solid var(--border-soft); font-size:12.5px; color:var(--text-dim);\n}\n.obstacle-item:last-child, .change-item:last-child{ border-bottom:none; }\n.tag-resolved{\n  flex-shrink:0; font-family:var(--font-mono); font-size:9.5px; font-weight:600;\n  padding: 2px 6px; border-radius:4px; background: var(--teal-dim); color:var(--teal);\n  text-transform:uppercase; letter-spacing:0.04em; margin-top:1px;\n}\n.change-num{\n  flex-shrink:0; width:18px;height:18px; border-radius:5px; background:var(--panel-2);\n  border:1px solid var(--border); display:flex; align-items:center;justify-content:center;\n  font-family:var(--font-mono); font-size:10px; color:var(--text-faint); font-weight:600;\n}\n\n/* nav insight cards in sidebar */\n.nav-section-title{\n  font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--text-faint);\n  font-weight:600; margin: 22px 0 10px 2px;\n}\n.insight-card{\n  border:1px solid var(--border); border-radius: var(--radius); padding:13px 14px;\n  margin-bottom:10px; cursor:pointer; background: var(--panel);\n  transition: border-color .15s, transform .1s, background .15s;\n}\n.insight-card:hover{ border-color: var(--blue); background: var(--bg-raised); }\n.insight-card:active{ transform: scale(0.99); }\n.insight-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }\n.insight-num{ font-family:var(--font-mono); font-size:10px; color:var(--text-faint); }\n.insight-title{ font-size:13.5px; font-weight:600; }\n.insight-arrow{ color:var(--text-faint); font-size:13px; transition:transform .15s; }\n.insight-card:hover .insight-arrow{ transform: translateX(3px); color:var(--blue); }\n.insight-body{ font-size:12px; color:var(--text-dim); line-height:1.55; }\n.insight-stat-row{ display:flex; gap:8px; margin-top:9px; flex-wrap:wrap; }\n.mini-stat{\n  font-family:var(--font-mono); font-size:11px; padding:4px 8px; border-radius:6px;\n  background: var(--panel-2); border:1px solid var(--border-soft); color:var(--text-dim);\n}\n.mini-stat b{ color:var(--text); font-weight:600; }\n.mini-stat.warn{ background:var(--amber-dim); color:var(--amber); border-color:transparent; }\n.mini-stat.warn b{ color:var(--amber); }\n.mini-stat.crit{ background:var(--red-dim); color:var(--red); border-color:transparent; }\n.mini-stat.crit b{ color:var(--red); }\n.mini-stat.good{ background:var(--teal-dim); color:var(--teal); border-color:transparent; }\n.mini-stat.good b{ color:var(--teal); }\n\n/* ===== Section headers in main ===== */\n.section{ margin-bottom: 46px; scroll-margin-top: 72px; }\n.section-head{\n  display:flex; align-items:baseline; gap:12px; margin-bottom:14px; flex-wrap:wrap;\n}\n.section-eyebrow{\n  font-family:var(--font-mono); font-size:11px; color: var(--blue); font-weight:600;\n}\n.section-title{ font-size:22px; font-weight:700; letter-spacing:-0.01em; }\n.section-desc{ color:var(--text-dim); font-size:13px; margin: -6px 0 18px 0; max-width:760px; }\n\n/* stat cards row */\n.stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }\n.stat-card{\n  background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);\n  padding: 13px 15px;\n}\n.stat-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-faint); font-weight:600; margin-bottom:6px; }\n.stat-value{ font-family:var(--font-mono); font-size:21px; font-weight:600; }\n.stat-value.teal{ color:var(--teal); } .stat-value.amber{ color:var(--amber); } .stat-value.red{ color:var(--red); } .stat-value.blue{ color:var(--blue); }\n.stat-foot{ font-size:11px; color:var(--text-faint); margin-top:4px; }\n\n/* team tabs */\n.tabs{ display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }\n.tab-btn{\n  font-family: var(--font-mono); font-size:12px; font-weight:600;\n  padding:7px 13px; border-radius:7px; border:1px solid var(--border);\n  background: var(--panel-2); color: var(--text-dim); cursor:pointer;\n  transition: all .12s;\n}\n.tab-btn:hover{ color:var(--text); border-color:var(--text-faint); }\n.tab-btn.active{ background: var(--teal-dim); color: var(--teal); border-color: transparent; }\n\n/* bar rows (for team success rate / brand totals) */\n.bar-list{ display:flex; flex-direction:column; gap:9px; margin-bottom: 18px;}\n.bar-row{ display:grid; grid-template-columns: 130px 1fr 74px; align-items:center; gap:12px; }\n.bar-row .lbl{ font-size:12.5px; font-weight:500; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\n.bar-track{ height:9px; background: var(--panel-2); border-radius:5px; overflow:hidden; border:1px solid var(--border-soft); }\n.bar-fill{ height:100%; border-radius:5px; background: linear-gradient(90deg, var(--blue), var(--teal)); }\n.bar-fill.amber{ background: linear-gradient(90deg, #a86a1f, var(--amber)); }\n.bar-fill.red{ background: linear-gradient(90deg, #9c2f42, var(--red)); }\n.bar-val{ font-family:var(--font-mono); font-size:12px; text-align:right; color:var(--text-dim); }\n\n/* callout lists (top offenders etc) */\n.callout-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap:10px; margin-bottom:18px; }\n.callout-box{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:13px 14px; }\n.callout-box h4{ margin:0 0 10px 0; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); }\n.callout-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }\n.callout-list li{\n  display:flex; justify-content:space-between; align-items:center; gap:8px;\n  padding:7px 6px; border-radius:6px; cursor:pointer; font-size:12.5px;\n}\n.callout-list li:hover{ background: var(--bg-raised); }\n.callout-list .cl-name{ font-weight:500; }\n.callout-list .cl-id{ color:var(--text-faint); font-family:var(--font-mono); font-size:10.5px; margin-left:6px;}\n.callout-list .cl-val{ font-family:var(--font-mono); font-weight:600; flex-shrink:0; }\n\n/* table toolbar + table */\n.table-toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;}\n.table-search{\n  flex:1; min-width:180px; max-width:320px;\n  background: var(--panel-2); border:1px solid var(--border); border-radius:7px;\n  padding:7px 11px; color:var(--text); font-family:var(--font-mono); font-size:12px; outline:none;\n}\n.table-search:focus{ border-color: var(--blue); }\n.table-count{ font-size:11.5px; color:var(--text-faint); font-family:var(--font-mono); }\n.table-wrap{\n  border:1px solid var(--border); border-radius: var(--radius); overflow:auto; max-height: 560px;\n  background: var(--panel-2);\n}\ntable.data-table{ width:100%; border-collapse:collapse; font-size:12.5px; }\ntable.data-table thead th{\n  position:sticky; top:0; z-index:2;\n  background: var(--bg-raised); text-align:left; padding:9px 12px;\n  font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-faint);\n  border-bottom:1px solid var(--border); cursor:pointer; white-space:nowrap; user-select:none;\n}\ntable.data-table thead th:hover{ color: var(--text); }\ntable.data-table thead th .arrow{ margin-left:4px; opacity:0.5; font-size:9px; }\ntable.data-table tbody td{\n  padding: 7px 12px; border-bottom:1px solid var(--border-soft); white-space:nowrap;\n  font-family: var(--font-mono); color: var(--text-dim);\n}\ntable.data-table tbody td.name-cell{ font-family:var(--font-display); color:var(--text); font-weight:500; }\ntable.data-table tbody tr:hover td{ background: var(--bg-raised); }\ntable.data-table tbody tr.flash td{ background: rgba(111,147,255,0.16); }\n.pill{ display:inline-block; padding:2px 7px; border-radius:5px; font-size:11px; font-weight:600; font-family:var(--font-mono); }\n.pill.good{ background:var(--teal-dim); color:var(--teal); }\n.pill.warn{ background:var(--amber-dim); color:var(--amber); }\n.pill.bad{ background:var(--red-dim); color:var(--red); }\n.pill.neutral{ background:var(--panel); color:var(--text-faint); border:1px solid var(--border); }\n\n.subtle-btn{\n  font-family: var(--font-mono); font-size:11.5px; color:var(--blue); background:none; border:1px solid var(--border);\n  padding:6px 12px; border-radius:7px; cursor:pointer; font-weight:600;\n}\n.subtle-btn:hover{ border-color: var(--blue); }\n\n/* implementation table */\n.impl-table{ width:100%; border-collapse:collapse; margin-bottom:18px; }\n.impl-table th{ text-align:left; font-size:10.5px; text-transform:uppercase; color:var(--text-faint); padding:8px 12px; border-bottom:1px solid var(--border); letter-spacing:0.05em;}\n.impl-table td{ padding:11px 12px; border-bottom:1px solid var(--border-soft); font-size:13px; }\n.status-badge{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--teal-dim); color:var(--teal); }\n.status-badge::before{ content:''; width:6px;height:6px;border-radius:50%; background:currentColor;}\n.status-badge.building{ background: var(--amber-dim); color: var(--amber); }\n\n.tools-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }\n.tool-card{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }\n.tool-card h4{ margin:0 0 8px 0; font-size:14.5px; }\n.footer-note{ text-align:center; color:var(--text-faint); font-size:11.5px; padding: 30px 0 10px; }\n\n/* chart containers (Volume / SLA / Top Performers / Speed sections) */\n.chart-wrap{\n  background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);\n  padding: 14px; height: 280px; margin-bottom: 18px; position: relative;\n}\n.chart-wrap canvas{ width:100% !important; height:100% !important; }\n.chart-wrap.chart-scroll{ overflow-y:auto; }\n.chart-wrap.chart-scroll canvas{ height:auto !important; }\n\n@media (max-width: 980px){\n  .layout{ flex-direction:column; }\n  .sidebar{ width:100%; position:relative; top:0; height:auto; border-right:none; border-bottom:1px solid var(--border); }\n  .global-search{ display:none; }\n}\n";
-var REPORT_ENGINE_JS = "const DATA = JSON.parse(document.getElementById('report-data').textContent);\nconst sectionControllers = {};\nconst charts = {};\n\n/* ---------------- helpers ---------------- */\nfunction esc(s){ return String(s===undefined||s===null?'':s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); }\nfunction normTeam(s){ return String(s||'').replace(/team/i,'').trim().toUpperCase(); }\nfunction num(v){ return (v===null||v===undefined||v==='-'||v==='') ? null : Number(v); }\nfunction fmtInt(v){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : Math.round(n).toLocaleString(); }\nfunction fmtNum(v, d=2){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : n.toFixed(d); }\nfunction dashOr(v){ return (v===null||v===undefined||v==='-'||v==='') ? '\u2014' : v; }\nfunction fmtSec(sec){ if(!sec || sec<=0) return '\u2014'; const m=Math.floor(sec/60), s=Math.round(sec%60); return m>0 ? (m+'m '+s+'s') : (s+'s'); }\nfunction parseTimeStr(s){\n  if(!s || s==='-') return -1;\n  let t=0; const h=s.match(/(\\d+)h/); if(h) t+=parseInt(h[1])*3600;\n  const m=s.match(/(\\d+)m/); if(m) t+=parseInt(m[1])*60;\n  const sec=s.match(/(\\d+)s/); if(sec) t+=parseInt(sec[1]);\n  return t;\n}\nfunction csatPill(v){\n  const n = num(v);\n  if(n===null || isNaN(n)) return `<span class=\"pill neutral\">\u2014</span>`;\n  if(n>1) return `<span class=\"pill bad\">${n.toFixed(2)} \u26a0</span>`;\n  const cls = n>=0.6?'good':n>=0.4?'warn':'bad';\n  return `<span class=\"pill ${cls}\">${(n*100).toFixed(0)}%</span>`;\n}\nfunction countPill(v, warnT, badT){\n  const n = num(v) ?? 0;\n  const cls = n>=badT?'bad':n>=warnT?'warn':'good';\n  return `<span class=\"pill ${cls}\">${n}</span>`;\n}\nfunction pctDeltaHtml(deltaPct, invert){\n  if(deltaPct===null || deltaPct===undefined || isNaN(deltaPct)) return `<span class=\"mini-stat\">no prior month</span>`;\n  const good = invert ? deltaPct<=0 : deltaPct>=0;\n  const cls = good ? 'good' : 'crit';\n  const arrow = deltaPct>=0 ? '\u25b2' : '\u25bc';\n  return `<span class=\"mini-stat ${cls}\"><b>${arrow} ${Math.abs(deltaPct).toFixed(1)}%</b> vs last month</span>`;\n}\nfunction themeColor(varName){\n  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6f93ff';\n}\nfunction chartFontColor(){ return themeColor('--text-dim'); }\nfunction chartGridColor(){\n  const isLight = document.documentElement.getAttribute('data-theme')==='light';\n  return isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';\n}\n\n/* ---------------- generic table component ---------------- */\nfunction createTable(container, columns, rows, opts={}){\n  const state = { search:'', sortKey: opts.defaultSort?.key || null, sortDir: opts.defaultSort?.dir || 'desc', rows };\n  container.innerHTML = `\n    <div class=\"table-toolbar\">\n      <input class=\"table-search\" placeholder=\"${opts.searchPlaceholder || 'Search by name or ID\u2026'}\">\n      <span class=\"table-count\"></span>\n    </div>\n    <div class=\"table-wrap\">\n      <table class=\"data-table\">\n        <thead><tr>${columns.map(c=>`<th data-key=\"${c.key}\">${esc(c.label)}</th>`).join('')}</tr></thead>\n        <tbody></tbody>\n      </table>\n    </div>`;\n  const searchInput = container.querySelector('.table-search');\n  const countEl = container.querySelector('.table-count');\n  const tbody = container.querySelector('tbody');\n  const ths = [...container.querySelectorAll('th')];\n\n  function filtered(){\n    let r = state.rows;\n    if(state.search){\n      const s = state.search.toLowerCase();\n      r = r.filter(row => columns.some(c => {\n        const v = c.searchValue ? c.searchValue(row) : (c.format ? c.format(row) : row[c.key]);\n        return String(v).replace(/<[^>]*>/g,'').toLowerCase().includes(s);\n      }));\n    }\n    if(state.sortKey){\n      const col = columns.find(c=>c.key===state.sortKey);\n      r = [...r].sort((a,b)=>{\n        let va = col.sortValue ? col.sortValue(a) : a[col.key];\n        let vb = col.sortValue ? col.sortValue(b) : b[col.key];\n        if(typeof va === 'string') va = va.toLowerCase();\n        if(typeof vb === 'string') vb = vb.toLowerCase();\n        if(va<vb) return state.sortDir==='asc'?-1:1;\n        if(va>vb) return state.sortDir==='asc'?1:-1;\n        return 0;\n      });\n    }\n    return r;\n  }\n\n  function render(){\n    const rows2 = filtered();\n    countEl.textContent = rows2.length.toLocaleString() + ' rows';\n    tbody.innerHTML = rows2.map(row=>{\n      const id = opts.rowId ? opts.rowId(row) : '';\n      return `<tr data-id=\"${esc(id)}\">${columns.map(c=>{\n        const val = c.format ? c.format(row) : esc(row[c.key]);\n        const cls = c.cellClass ? (typeof c.cellClass==='function'? c.cellClass(row): c.cellClass) : '';\n        return `<td class=\"${cls}\">${val}</td>`;\n      }).join('')}</tr>`;\n    }).join('') || `<tr><td colspan=\"${columns.length}\" style=\"color:var(--text-faint);padding:22px;text-align:center;font-family:var(--font-display);\">No matching rows</td></tr>`;\n    ths.forEach(th=>{\n      const col = columns.find(c=>c.key===th.dataset.key);\n      th.innerHTML = esc(col.label) + (state.sortKey===th.dataset.key ? `<span class=\"arrow\">${state.sortDir==='asc'?'\u25b2':'\u25bc'}</span>` : '');\n    });\n  }\n\n  searchInput.addEventListener('input', e=>{ state.search = e.target.value; render(); });\n  ths.forEach(th=>{\n    th.addEventListener('click', ()=>{\n      const key = th.dataset.key;\n      if(state.sortKey===key){ state.sortDir = state.sortDir==='asc'?'desc':'asc'; }\n      else { state.sortKey = key; state.sortDir = 'desc'; }\n      render();\n    });\n  });\n\n  render();\n\n  return {\n    setRows(newRows){ state.rows = newRows; render(); },\n    clearSearch(){ searchInput.value=''; state.search=''; render(); },\n    searchFor(query){\n      searchInput.value = query; state.search = query; render();\n      requestAnimationFrame(()=>{\n        const row = tbody.querySelector('tr[data-id]');\n        if(row){ row.classList.add('flash'); row.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>row.classList.remove('flash'), 1900); }\n      });\n    }\n  };\n}\n\n/* ---------------- jump / navigation ---------------- */\nfunction jumpTo(sectionId, opts={}){\n  const el = document.getElementById(sectionId);\n  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});\n  const ctrl = sectionControllers[sectionId];\n  if(!ctrl) return;\n  const delay = (opts.team && ctrl.setTeam) ? 380 : 60;\n  if(opts.team && ctrl.setTeam) ctrl.setTeam(opts.team);\n  if(opts.search && ctrl.table){ setTimeout(()=> ctrl.table.searchFor(opts.search), delay); }\n}\nwindow.jumpTo = jumpTo;\n\n/* ==================================================================\n   SIDEBAR\n   ================================================================== */\nfunction renderSidebar(){\n  const sb = document.getElementById('sidebar');\n  const sr = DATA.skillReport;\n  const ms = DATA.mistake;\n  const t = DATA.traffic;\n  const vol = DATA.volume;\n  const speed = DATA.speed;\n  const top = DATA.topPerformers;\n  const internalTot = sr.teamTotals.find(x=>normTeam(x.team)==='INTERNAL');\n  const outsourceTot = sr.teamTotals.find(x=>normTeam(x.team)==='OUTSOURCE');\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  const topMistake = ms.insights.topMistakeAgents[0];\n  const hc = DATA.headcount || {groups:[], total:0};\n  const hcBreakdown = hc.groups.map(g=>`${g.active}${g.vacation?('+'+g.vacation+' vac'):''} ${esc(g.label)}`).join(' \u00b7 ');\n  const bestPerformer = top[0];\n\n  sb.innerHTML = `\n    <div class=\"card\">\n      <div class=\"eyebrow-badge\">${esc(DATA.meta.monthLong.toUpperCase())} \u00b7 ${esc(DATA.meta.region)} MONTHLY REPORT</div>\n      <div class=\"exec-title\">Executive Summary</div>\n      <div class=\"exec-sub\">Traffic, skill, speed &amp; QA quality in one view</div>\n      <div class=\"exec-para\">\n        Current headcount stands at <strong>${hc.total}</strong> (${hcBreakdown || 'no status data on file'}), counting only Active and Vacation. In ${esc(DATA.meta.monthLong)}, the team fielded <strong>${fmtInt(vol.current.total)}</strong> total chats (${pctDeltaHtml(vol.momTotalPct)}) across <strong>${t.brands.filter(b=>b&&b!=='-').length}</strong> brands, split <strong>${fmtInt(vol.current.agent)}</strong> agent-handled and <strong>${fmtInt(vol.current.bot)}</strong> bot-handled for an automation rate of <strong>${Number(vol.current.autoPct||0).toFixed(1)}%</strong>${vol.momAutoPtsChange===null?'':(' ('+(vol.momAutoPtsChange>=0?'+':'')+Number(vol.momAutoPtsChange).toFixed(1)+' pts vs last month)')}. On service levels, <strong>Internal</strong> averaged ${dashOr(internalTot?internalTot.frt:null)} FRT / ${dashOr(internalTot?internalTot.mrt:null)} MRT${outsourceTot?(' versus <strong>Outsource</strong> at '+dashOr(outsourceTot.frt)+' FRT / '+dashOr(outsourceTot.mrt)+' MRT'):''}. Team-wide latency averaged <strong>${fmtSec(speed.avgFrt)}</strong> FRT and <strong>${fmtSec(speed.avgMrt)}</strong> MRT, with <strong>${Number(speed.frtCompliancePct||0).toFixed(0)}%</strong> of agents meeting the 60s FRT target and <strong>${Number(speed.mrtCompliancePct||0).toFixed(0)}%</strong> the 120s MRT target. ${bestPerformer?('<strong>'+esc(bestPerformer.name)+'</strong> led all agents with <strong>'+fmtInt(bestPerformer.totalChat)+'</strong> chats handled'+((top[1]&&top[2])?(', ahead of '+esc(top[1].name)+' ('+fmtInt(top[1].totalChat)+') and '+esc(top[2].name)+' ('+fmtInt(top[2].totalChat)+')'):'')+'. '):'No agent chat volume was recorded this month. '}On quality, <strong>${fmtInt(ms.totalErrors)}</strong> QA errors were logged${ms.mostCommonMistake?(', led by <strong>'+esc(ms.mostCommonMistake.type)+'</strong> ('+ms.mostCommonMistake.count+' instances)'):''}${topMistake?(', with <strong>'+esc(topMistake.name)+'</strong> logging the most overall ('+topMistake.total+')'):''}. ${(DATA.takeaways&&DATA.takeaways.length)?('<strong>Key takeaway:</strong> '+esc(DATA.takeaways[0])+' '):''}Full breakdowns are laid out to the right; click any card below to jump straight to the data.\n      </div>\n    </div>\n\n    ${hc.groups.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Headcount (Active + Vacation)<span class=\"line\"></span></div>\n      ${hc.groups.map(g=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${g.active+g.vacation}</span>\n          <span><b>${esc(g.label)}:</b> ${g.activeAff>0?(g.activeCs+'cs + '+g.activeAff+' aff active'):(g.active+' active')}${g.vacation?(', '+g.vacation+' on vacation'):''}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    ${DATA.remarks.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Team Remarks This Month<span class=\"line\"></span></div>\n      ${DATA.remarks.slice(0,8).map(r=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${esc(r.team)} \u00b7 Wk${esc(r.week)}</span>\n          <span><b>${esc(r.agent)}:</b> ${esc(r.text)}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    <div class=\"nav-section-title\">Report sections \u2014 click to explore</div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('traffic')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">1 \u00b7 Traffic Summary</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Bot dominance: roughly ${autoPct}% of chats resolved without agent intervention this month. Full day-by-day, per-brand data is linked on the right.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${fmtInt(totalAssigned)}</b> agent-assigned</span>\n        <span class=\"mini-stat good\"><b>${fmtInt(totalBot)}</b> bot-handled</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('skill')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">2 \u00b7 Skill Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal vs Outsource \u2014 First Response (FRT) and Second Response (MRT) compared side by side.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>Internal</b> ${dashOr(internalTot?internalTot.frt:null)} FRT \u00b7 ${dashOr(internalTot?internalTot.mrt:null)} MRT</span>\n        <span class=\"mini-stat\"><b>Outsource</b> ${dashOr(outsourceTot?outsourceTot.frt:null)} FRT \u00b7 ${dashOr(outsourceTot?outsourceTot.mrt:null)} MRT</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('mistake')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">3 \u00b7 Mistake Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">QA errors broken down by team and agent${ms.mostCommonMistake?(', most commonly '+esc(ms.mostCommonMistake.type)):''}. Click through for the full per-agent breakdown.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${ms.totalErrors>0?'crit':'good'}\"><b>${fmtInt(ms.totalErrors)}</b> QA errors</span>\n        ${topMistake?('<span class=\"mini-stat\"><b>'+topMistake.total+'</b> \u00b7 '+esc(topMistake.name)+'</span>'):''}\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('speed')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">4 \u00b7 Speed / Latency</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Share of agents meeting the FRT (&le;60s) and MRT (&le;120s) SLA targets this month.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${speed.frtCompliancePct>=70?'good':speed.frtCompliancePct>=40?'warn':'crit'}\"><b>${speed.frtCompliancePct.toFixed(0)}%</b> meet FRT target</span>\n        <span class=\"mini-stat ${speed.mrtCompliancePct>=70?'good':speed.mrtCompliancePct>=40?'warn':'crit'}\"><b>${speed.mrtCompliancePct.toFixed(0)}%</b> meet MRT target</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('takeaways')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">5 \u00b7 Key Takeaways</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">${DATA.takeaways.length} auto-generated, month-over-month takeaways \u2014 volume, automation, and quality trends.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${DATA.takeaways.length}</b> takeaways</span>\n      </div>\n    </div>\n  `;\n}\n\n/* ==================================================================\n   MAIN SECTIONS\n   ================================================================== */\nfunction barRow(label, value, max, colorCls=''){\n  const pct = max>0 ? Math.max(2, (value/max*100)) : 0;\n  return `<div class=\"bar-row\">\n    <div class=\"lbl\" title=\"${esc(label)}\">${esc(label)}</div>\n    <div class=\"bar-track\"><div class=\"bar-fill ${colorCls}\" style=\"width:${pct}%\"></div></div>\n    <div class=\"bar-val\">${typeof value === 'number' && value<=1 ? (value*100).toFixed(0)+'%' : fmtInt(value)}</div>\n  </div>`;\n}\n\n/* ---- 01 \u00b7 Traffic ---- */\nfunction renderTraffic(){\n  const t = DATA.traffic;\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  return `\n  <section class=\"section\" id=\"traffic\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">01</span><span class=\"section-title\">Traffic Summary</span></div>\n    <div class=\"section-desc\">${esc(t.summary)} Day-by-day, per-brand breakdown below.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Assigned</div><div class=\"stat-value blue\">${fmtInt(totalAssigned)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(totalBot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${autoPct}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Brands Tracked</div><div class=\"stat-value\">${t.brands.filter(b=>b && b!=='-').length}</div></div>\n    </div>\n    <div class=\"tabs\" id=\"trafficModeTabs\">\n      <button class=\"tab-btn active\" data-mode=\"assigned\">Agent-Assigned</button>\n      <button class=\"tab-btn\" data-mode=\"bot\">Bot-Handled</button>\n    </div>\n    <div class=\"bar-list\" id=\"trafficBars\"></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Day-by-day breakdown<span class=\"line\"></span></div>\n    <div id=\"trafficTable\"></div>\n  </section>`;\n}\nfunction mountTraffic(){\n  const t = DATA.traffic;\n  const brands = t.brands.filter(b=>b && b!=='-');\n  const barsEl = document.getElementById('trafficBars');\n  const tableEl = document.getElementById('trafficTable');\n  if(!t.assignedDays.length){ tableEl.innerHTML = '<div style=\"color:var(--text-faint);padding:14px 0\">No daily data for this month</div>'; barsEl.innerHTML=''; sectionControllers.traffic={}; return; }\n\n  const columns = [\n    { key:'day', label:'Day', cellClass:'name-cell', sortValue:r=>{ const m=String(r.day).match(/(\\d+)\\s*$/); return m?parseInt(m[1],10):0; } },\n    ...brands.map(b => ({ key:b, label:b, format:r=>fmtInt(r[b]), sortValue:r=>Number(r[b])||0 }))\n  ];\n  const table = createTable(tableEl, columns, t.assignedDays, { searchPlaceholder:'Search by day\u2026', rowId:r=>r.day, defaultSort:{key:'day', dir:'asc'} });\n\n  function renderBars(mode){\n    const totals = mode==='assigned' ? t.totalsAssigned : t.totalsBot;\n    const arr = brands.map(b=>({b, v:Number(totals[b])||0})).sort((a,b)=>b.v-a.v);\n    const max = arr[0]?.v || 1;\n    barsEl.innerHTML = arr.map(x=>barRow(x.b, x.v, max, mode==='bot'?'':'amber')).join('');\n  }\n  renderBars('assigned');\n\n  document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(btn=>{\n    btn.addEventListener('click', ()=>{\n      document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(b=>b.classList.remove('active'));\n      btn.classList.add('active');\n      const mode = btn.dataset.mode;\n      renderBars(mode);\n      table.setRows(mode==='assigned' ? t.assignedDays : t.botDays);\n    });\n  });\n\n  sectionControllers.traffic = { table };\n}\n\n/* ---- 02 \u00b7 Volume (trend chart, agent vs bot, MoM) ---- */\nfunction renderVolume(){\n  const v = DATA.volume;\n  return `\n  <section class=\"section\" id=\"volume\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Volume</span></div>\n    <div class=\"section-desc\">Total chat volume trend for the year, agent vs bot split, and how this month compares to last month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Chats (${esc(DATA.meta.month)})</div><div class=\"stat-value blue\">${fmtInt(v.current.total)}</div><div class=\"stat-foot\">${pctDeltaHtml(v.momTotalPct)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Handled</div><div class=\"stat-value\">${fmtInt(v.current.agent)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(v.current.bot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${v.current.autoPct.toFixed(1)}%</div>\n        <div class=\"stat-foot\">${v.momAutoPtsChange===null?'no prior month':((v.momAutoPtsChange>=0?'\u25b2 ':'\u25bc ')+Math.abs(v.momAutoPtsChange).toFixed(1)+' pts vs last month')}</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"volumeChart\"></canvas></div>\n  </section>`;\n}\nfunction mountVolume(){\n  const v = DATA.volume;\n  const ctx = document.getElementById('volumeChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  if(charts.volume) charts.volume.destroy();\n  charts.volume = new Chart(ctx, {\n    type:'line',\n    data:{\n      labels: v.monthlyTrend.map(r=>r.month),\n      datasets:[\n        { label:'Agent', data:v.monthlyTrend.map(r=>r.agent), borderColor:themeColor('--blue'), backgroundColor:themeColor('--blue'), tension:.35, pointRadius:3, fill:false },\n        { label:'Bot', data:v.monthlyTrend.map(r=>r.bot), borderColor:themeColor('--teal'), backgroundColor:themeColor('--teal'), tension:.35, pointRadius:3, fill:false }\n      ]\n    },\n    options:{\n      responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{\n        x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} },\n        y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), callback:v=>fmtInt(v)} }\n      }\n    }\n  });\n  sectionControllers.volume = {};\n}\n\n/* ---- 03 \u00b7 SLA Performance (was \"Skill Reports\") ---- */\nfunction teamTabsHtml(teams, activeIdx=0){\n  return `<div class=\"tabs\">${teams.map((t,i)=>`<button class=\"tab-btn ${i===activeIdx?'active':''}\" data-idx=\"${i}\">${normTeam(t.team)}</button>`).join('')}</div>`;\n}\nfunction renderSkill(){\n  const sr = DATA.skillReport;\n  return `\n  <section class=\"section\" id=\"skill\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Skill Reports</span></div>\n    <div class=\"section-desc\">${esc(sr.summary)}</div>\n    <div id=\"skillTabs\"></div>\n    <div class=\"stat-grid\" id=\"skillStats\"></div>\n    <div class=\"chart-wrap\" style=\"height:220px\"><canvas id=\"skillChart\"></canvas></div>\n    <div id=\"skillTable\"></div>\n  </section>`;\n}\nfunction mountSkill(){\n  const sr = DATA.skillReport;\n  const totalsByTeam = {};\n  sr.teamTotals.forEach(t=> totalsByTeam[normTeam(t.team)] = t);\n  const tabsEl = document.getElementById('skillTabs');\n  const statsEl = document.getElementById('skillStats');\n  const tableEl = document.getElementById('skillTable');\n\n  mountSkillChartOnly_();\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n    { key:'frt', label:'FRT', format:r=>dashOr(r.frt), sortValue:r=>parseTimeStr(r.frt) },\n    { key:'mrt', label:'MRT', format:r=>dashOr(r.mrt), sortValue:r=>parseTimeStr(r.mrt) },\n    { key:'aht', label:'AHT', format:r=>dashOr(r.aht), sortValue:r=>parseTimeStr(r.aht) },\n    { key:'csat', label:'CSAT', format:r=>csatPill(r.csat), sortValue:r=>num(r.csat)??-1 },\n  ];\n  let table = null;\n\n  function renderStats(idx){\n    const team = sr.teams[idx];\n    const tot = totalsByTeam[normTeam(team.team)];\n    statsEl.innerHTML = tot ? `\n      <div class=\"stat-card\"><div class=\"stat-label\">Team Total Chat</div><div class=\"stat-value blue\">${fmtInt(tot.totalChat)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">FRT</div><div class=\"stat-value\">${dashOr(tot.frt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">MRT</div><div class=\"stat-value\">${dashOr(tot.mrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">AHT</div><div class=\"stat-value\">${dashOr(tot.aht)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">CSAT</div><div class=\"stat-value ${tot.csat>=0.6?'teal':tot.csat>=0.4?'amber':'red'}\">${(tot.csat*100).toFixed(0)}%</div></div>\n    ` : `<div class=\"stat-card\"><div class=\"stat-label\">Agents</div><div class=\"stat-value\">${team.agents.length}</div></div>`;\n  }\n\n  function setTeam(idxOrName){\n    let idx = idxOrName;\n    if(typeof idxOrName === 'string'){\n      idx = sr.teams.findIndex(t=> normTeam(t.team)===normTeam(idxOrName));\n      if(idx<0) idx = 0;\n    }\n    tabsEl.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.idx)===idx));\n    renderStats(idx);\n    if(table) table.setRows(sr.teams[idx].agents); else table = createTable(tableEl, columns, sr.teams[idx].agents, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n  }\n\n  tabsEl.innerHTML = teamTabsHtml(sr.teams, 0);\n  tabsEl.querySelectorAll('.tab-btn').forEach(btn=> btn.addEventListener('click', ()=> setTeam(Number(btn.dataset.idx))));\n  setTeam(0);\n\n  sectionControllers.skill = { setTeam, get table(){ return table; } };\n}\nfunction mountSkillChartOnly_(){\n  const sr = DATA.skillReport;\n  const chartCtx = document.getElementById('skillChart');\n  if(!chartCtx || typeof Chart==='undefined') return;\n  if(charts.skill) charts.skill.destroy();\n  const labels = sr.teamTotals.map(t=>normTeam(t.team));\n  charts.skill = new Chart(chartCtx, {\n    type:'bar',\n    data:{ labels, datasets:[\n      { label:'FRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.frt)<0?0:parseTimeStr(t.frt)), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.mrt)<0?0:parseTimeStr(t.mrt)), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n}\n\n/* ---- 04 \u00b7 Top Performers ---- */\nfunction renderTopPerformers(){\n  return `\n  <section class=\"section\" id=\"performers\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Top Performers</span></div>\n    <div class=\"section-desc\">Top agents this month, ranked by total chats handled (Internal + Outsource combined).</div>\n    <div class=\"chart-wrap chart-scroll\" id=\"performersChartWrap\"><div id=\"performersChartInner\"><canvas id=\"performersChart\"></canvas></div></div>\n    <div id=\"performersTable\"></div>\n  </section>`;\n}\nfunction mountTopPerformers(){\n  const top = DATA.topPerformers;\n  const ctx = document.getElementById('performersChart');\n  const inner = document.getElementById('performersChartInner');\n  if(inner) inner.style.height = Math.max(280, top.length*32) + 'px';\n  if(ctx && typeof Chart!=='undefined' && top.length){\n    if(charts.performers) charts.performers.destroy();\n    charts.performers = new Chart(ctx, {\n      type:'bar',\n      data:{ labels: top.map(a=>a.name), datasets:[{ label:'Total Chats', data:top.map(a=>a.totalChat), backgroundColor:top.map(a=>a.team==='Outsource Team'?themeColor('--amber'):themeColor('--blue')) }] },\n      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,\n        plugins:{ legend:{ display:false } },\n        scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n      }\n    });\n  }\n  const columns = [\n    { key:'rank', label:'#', format:r=>String(top.indexOf(r)+1) },\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n  ];\n  const tableEl = document.getElementById('performersTable');\n  const table = createTable(tableEl, columns, top, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n  sectionControllers.performers = { table };\n}\n\n/* ---- 05 \u00b7 Speed / Latency ---- */\nfunction renderSpeed(){\n  const s = DATA.speed;\n  return `\n  <section class=\"section\" id=\"speed\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Speed / Latency</span></div>\n    <div class=\"section-desc\">First Response (FRT \u226460s target) and Second Response (MRT \u2264120s target) compliance across all agents with chats this month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg FRT</div><div class=\"stat-value amber\">${fmtSec(s.avgFrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg MRT</div><div class=\"stat-value blue\">${fmtSec(s.avgMrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg AHT</div><div class=\"stat-value\">${fmtSec(s.avgAht)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">FRT Target Met</div><div class=\"stat-value ${s.frtCompliancePct>=70?'teal':s.frtCompliancePct>=40?'amber':'red'}\">${s.frtCompliancePct.toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">MRT Target Met</div><div class=\"stat-value ${s.mrtCompliancePct>=70?'teal':s.mrtCompliancePct>=40?'amber':'red'}\">${s.mrtCompliancePct.toFixed(0)}%</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"speedChart\"></canvas></div>\n  </section>`;\n}\nfunction mountSpeed(){\n  const s = DATA.speed;\n  const ctx = document.getElementById('speedChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  const top = [...s.agents].sort((a,b)=>b.frtSec-a.frtSec).slice(0,15);\n  if(charts.speed) charts.speed.destroy();\n  charts.speed = new Chart(ctx, {\n    type:'bar',\n    data:{ labels: top.map(a=>a.name), datasets:[\n      { label:'FRT (sec)', data:top.map(a=>a.frtSec), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:top.map(a=>a.mrtSec), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), maxRotation:60, minRotation:60, font:{size:9} } }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n  sectionControllers.speed = {};\n}\n\n/* ---- 06 \u00b7 Key Takeaways ---- */\nfunction renderTakeaways(){\n  return `\n  <section class=\"section\" id=\"takeaways\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Key Takeaways</span></div>\n    <div class=\"section-desc\">Auto-generated, month-over-month observations \u2014 volume, automation, and quality trends (not CSAT-focused).</div>\n    <div class=\"callout-box\">\n      <ul class=\"callout-list\" style=\"display:flex;flex-direction:column;gap:10px\">\n        ${DATA.takeaways.map((tk,i)=>`<li style=\"cursor:default;justify-content:flex-start;align-items:flex-start;gap:10px\"><span class=\"change-num\" style=\"margin-top:2px;flex-shrink:0\">${i+1}</span><span style=\"white-space:normal;text-align:left;color:var(--text-dim)\">${esc(tk)}</span></li>`).join('')}\n      </ul>\n    </div>\n  </section>`;\n}\n\n/* ---- shared: Mistake Reports (QA) ---- */\nfunction renderMistake(){\n  const ms = DATA.mistake;\n  const maxType = Math.max(1, ...ms.mistakeTypeCounts.map(m=>m.count));\n  return `\n  <section class=\"section\" id=\"mistake\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">03</span><span class=\"section-title\">Mistake Reports</span></div>\n    <div class=\"section-desc\">${esc(ms.summary)}</div>\n    <div class=\"callout-grid\">\n      <div class=\"callout-box\">\n        <h4>Most Common Errors (All Teams)</h4>\n        <div class=\"bar-list\">\n          ${ms.mistakeTypeCounts.filter(m=>m.count>0).sort((a,b)=>b.count-a.count).map(m=>barRow(m.label, m.count, maxType, 'amber')).join('') || '<div style=\"color:var(--text-faint);font-size:12.5px\">No errors logged this month</div>'}\n        </div>\n      </div>\n      <div class=\"callout-box\">\n        <h4>Agents With Highest Mistakes</h4>\n        <ul class=\"callout-list\">\n          ${ms.insights.topMistakeAgents.slice(0,6).map(a=>`\n            <li onclick=\"jumpTo('mistake',{team:'${esc(a.team)}', search:'${esc(a.id)}'})\">\n              <span><span class=\"cl-name\">${esc(a.name)}</span><span class=\"cl-id\">${esc(a.id)} \u00b7 ${esc(a.team)}</span></span>\n              <span class=\"cl-val\" style=\"color:var(--red)\">${a.total}</span>\n            </li>`).join('') || '<li style=\"color:var(--text-faint)\">No mistakes logged this month</li>'}\n        </ul>\n      </div>\n    </div>\n    <div id=\"mistakeTabs\"></div>\n    <div class=\"stat-grid\" id=\"mistakeStats\"></div>\n    <div id=\"mistakeTable\"></div>\n  </section>`;\n}\nfunction mountMistake(){\n  const ms = DATA.mistake;\n  const totalsByTeam = {};\n  ms.teamTotals.forEach(t=> totalsByTeam[normTeam(t.team)] = t);\n  const tabsEl = document.getElementById('mistakeTabs');\n  const statsEl = document.getElementById('mistakeStats');\n  const tableEl = document.getElementById('mistakeTable');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'notFollowSOP', label:'Not SOP', format:r=>countPill(r.notFollowSOP,1,3), sortValue:r=>num(r.notFollowSOP)??0 },\n    { key:'wrongInfo', label:'Wrong Info', format:r=>countPill(r.wrongInfo,1,3), sortValue:r=>num(r.wrongInfo)??0 },\n    { key:'noSolution', label:'No Solution', format:r=>countPill(r.noSolution,1,3), sortValue:r=>num(r.noSolution)??0 },\n    { key:'noExplanation', label:'No Explanation', format:r=>countPill(r.noExplanation,1,3), sortValue:r=>num(r.noExplanation)??0 },\n    { key:'lateReply', label:'Late Reply', format:r=>fmtInt(r.lateReply), sortValue:r=>num(r.lateReply)??0 },\n    { key:'noReply', label:'No Reply', format:r=>fmtInt(r.noReply), sortValue:r=>num(r.noReply)??0 },\n    { key:'angry', label:'Unprofessional', format:r=>fmtInt(r.angry), sortValue:r=>num(r.angry)??0 },\n    { key:'verbalWarning', label:'Verbal Warn.', format:r=>fmtInt(r.verbalWarning), sortValue:r=>num(r.verbalWarning)??0 },\n    { key:'warningLetter', label:'Warning Letter', format:r=>fmtInt(r.warningLetter), sortValue:r=>num(r.warningLetter)??0 },\n    { key:'total', label:'Total', format:r=>countPill(r.total,3,7), sortValue:r=>num(r.total)??0 },\n  ];\n  let table = null;\n\n  function renderStats(idx){\n    const team = ms.teams[idx];\n    const tot = totalsByTeam[normTeam(team.team)];\n    statsEl.innerHTML = tot ? `\n      <div class=\"stat-card\"><div class=\"stat-label\">Not Follow SOP</div><div class=\"stat-value amber\">${fmtInt(tot.notFollowSOP)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Wrong Information</div><div class=\"stat-value red\">${fmtInt(tot.wrongInfo)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Solution</div><div class=\"stat-value\">${fmtInt(tot.noSolution)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Explanation</div><div class=\"stat-value\">${fmtInt(tot.noExplanation)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Errors</div><div class=\"stat-value blue\">${fmtInt(tot.total)}</div></div>\n    ` : '';\n  }\n\n  function setTeam(idxOrName){\n    let idx = idxOrName;\n    if(typeof idxOrName === 'string'){\n      idx = ms.teams.findIndex(t=> normTeam(t.team)===normTeam(idxOrName));\n      if(idx<0) idx = 0;\n    }\n    tabsEl.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.idx)===idx));\n    renderStats(idx);\n    if(table) table.setRows(ms.teams[idx].agents); else table = createTable(tableEl, columns, ms.teams[idx].agents, { rowId:r=>r.id, defaultSort:{key:'total', dir:'desc'} });\n  }\n\n  tabsEl.innerHTML = teamTabsHtml(ms.teams, 0);\n  tabsEl.querySelectorAll('.tab-btn').forEach(btn=> btn.addEventListener('click', ()=> setTeam(Number(btn.dataset.idx))));\n  setTeam(0);\n\n  sectionControllers.mistake = { setTeam, get table(){ return table; } };\n}\n\n/* ==================================================================\n   GLOBAL SEARCH (agents only \u2014 searches the SLA Performance roster)\n   ================================================================== */\nfunction buildGlobalIndex(){\n  const idx = [];\n  const seen = new Set();\n  DATA.skillReport.teams.forEach(t=> t.agents.forEach(a=>{\n    if(seen.has(a.id)) return; seen.add(a.id);\n    idx.push({ id:a.id, name:a.name, team:normTeam(t.team), section:'skill' });\n  }));\n  return idx;\n}\nfunction mountGlobalSearch(){\n  const idx = buildGlobalIndex();\n  const input = document.getElementById('globalSearch');\n  const results = document.getElementById('globalResults');\n  function render(q){\n    const s = q.trim().toLowerCase();\n    if(!s){ results.classList.remove('show'); results.innerHTML=''; return; }\n    const matches = idx.filter(r => r.id.toLowerCase().includes(s) || r.name.toLowerCase().includes(s)).slice(0,10);\n    results.innerHTML = matches.length ? matches.map(r=>`\n      <div class=\"gr-item\" data-id=\"${esc(r.id)}\" data-team=\"${esc(r.team)}\" data-section=\"${r.section}\">\n        <span class=\"gr-name\">${esc(r.name)}</span>\n        <span class=\"gr-meta\">${esc(r.id)} \u00b7 ${esc(r.team)}</span>\n      </div>`).join('') : `<div class=\"gr-empty\">No agent matches \"${esc(q)}\"</div>`;\n    results.classList.add('show');\n  }\n  input.addEventListener('input', e=> render(e.target.value));\n  input.addEventListener('focus', e=> { if(e.target.value) render(e.target.value); });\n  document.addEventListener('click', e=>{ if(!e.target.closest('.global-search')) results.classList.remove('show'); });\n  results.addEventListener('click', e=>{\n    const item = e.target.closest('.gr-item');\n    if(!item) return;\n    jumpTo('skill', { team: item.dataset.team, search: item.dataset.id });\n    results.classList.remove('show');\n    input.value = '';\n  });\n}\n\n/* ==================================================================\n   THEME TOGGLE (re-renders charts so their colors track the theme)\n   ================================================================== */\nfunction mountThemeToggle(){\n  const btn = document.getElementById('themeToggle');\n  const html = document.documentElement;\n  const stored = localStorage.getItem('ops-theme') || 'dark';\n  html.setAttribute('data-theme', stored);\n  btn.textContent = stored === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n  btn.addEventListener('click', ()=>{\n    const current = html.getAttribute('data-theme');\n    const next = current === 'light' ? 'dark' : 'light';\n    html.setAttribute('data-theme', next);\n    localStorage.setItem('ops-theme', next);\n    btn.textContent = next === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n    mountSpeed(); mountSkillChartOnly_();\n  });\n}\n\n/* ==================================================================\n   BOOT\n   ================================================================== */\nfunction boot(){\n  const brandEl = document.querySelector('.topbar .brand');\n  if(brandEl) brandEl.innerHTML = '<span class=\"dot\"></span> '+esc(DATA.meta.region)+' Monthly Operational Report <span class=\"sub\">\u2014 '+esc(DATA.meta.monthLong)+'</span>';\n  renderSidebar();\n  const main = document.getElementById('main');\n  main.innerHTML = renderTraffic() + renderSkill() + renderMistake() + renderSpeed() + renderTakeaways() +\n    `<div class=\"footer-note\">Generated from ${esc(DATA.meta.region)} Google Sheet \u00b7 ${esc(DATA.meta.monthLong)} report \u00b7 ${esc(DATA.meta.generatedAt)}</div>`;\n  mountTraffic();\n  mountSkill();\n  mountMistake();\n  mountSpeed();\n  mountGlobalSearch();\n  mountThemeToggle();\n}\nboot();\n";
+var REPORT_ENGINE_JS = "const DATA = JSON.parse(document.getElementById('report-data').textContent);\nconst sectionControllers = {};\nconst charts = {};\n\n/* ---------------- helpers ---------------- */\nfunction esc(s){ return String(s===undefined||s===null?'':s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); }\nfunction normTeam(s){ return String(s||'').replace(/team/i,'').trim().toUpperCase(); }\nfunction num(v){ return (v===null||v===undefined||v==='-'||v==='') ? null : Number(v); }\nfunction fmtInt(v){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : Math.round(n).toLocaleString(); }\nfunction fmtNum(v, d=2){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : n.toFixed(d); }\nfunction dashOr(v){ return (v===null||v===undefined||v==='-'||v==='') ? '\u2014' : v; }\nfunction fmtSec(sec){ if(!sec || sec<=0) return '\u2014'; const m=Math.floor(sec/60), s=Math.round(sec%60); return m>0 ? (m+'m '+s+'s') : (s+'s'); }\nfunction parseTimeStr(s){\n  if(!s || s==='-') return -1;\n  let t=0; const h=s.match(/(\\d+)h/); if(h) t+=parseInt(h[1])*3600;\n  const m=s.match(/(\\d+)m/); if(m) t+=parseInt(m[1])*60;\n  const sec=s.match(/(\\d+)s/); if(sec) t+=parseInt(sec[1]);\n  return t;\n}\nfunction csatPill(v){\n  const n = num(v);\n  if(n===null || isNaN(n)) return `<span class=\"pill neutral\">\u2014</span>`;\n  if(n>1) return `<span class=\"pill bad\">${n.toFixed(2)} \u26a0</span>`;\n  const cls = n>=0.6?'good':n>=0.4?'warn':'bad';\n  return `<span class=\"pill ${cls}\">${(n*100).toFixed(0)}%</span>`;\n}\nfunction countPill(v, warnT, badT){\n  const n = num(v) ?? 0;\n  const cls = n>=badT?'bad':n>=warnT?'warn':'good';\n  return `<span class=\"pill ${cls}\">${n}</span>`;\n}\nfunction pctDeltaHtml(deltaPct, invert){\n  if(deltaPct===null || deltaPct===undefined || isNaN(deltaPct)) return `<span class=\"mini-stat\">no prior month</span>`;\n  const good = invert ? deltaPct<=0 : deltaPct>=0;\n  const cls = good ? 'good' : 'crit';\n  const arrow = deltaPct>=0 ? '\u25b2' : '\u25bc';\n  return `<span class=\"mini-stat ${cls}\"><b>${arrow} ${Math.abs(deltaPct).toFixed(1)}%</b> vs last month</span>`;\n}\nfunction themeColor(varName){\n  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6f93ff';\n}\nfunction chartFontColor(){ return themeColor('--text-dim'); }\nfunction chartGridColor(){\n  const isLight = document.documentElement.getAttribute('data-theme')==='light';\n  return isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';\n}\n\n/* ---------------- generic table component ---------------- */\nfunction createTable(container, columns, rows, opts={}){\n  const state = { search:'', sortKey: opts.defaultSort?.key || null, sortDir: opts.defaultSort?.dir || 'desc', rows };\n  container.innerHTML = `\n    <div class=\"table-toolbar\">\n      <input class=\"table-search\" placeholder=\"${opts.searchPlaceholder || 'Search by name or ID\u2026'}\">\n      <span class=\"table-count\"></span>\n    </div>\n    <div class=\"table-wrap\">\n      <table class=\"data-table\">\n        <thead><tr>${columns.map(c=>`<th data-key=\"${c.key}\">${esc(c.label)}</th>`).join('')}</tr></thead>\n        <tbody></tbody>\n      </table>\n    </div>`;\n  const searchInput = container.querySelector('.table-search');\n  const countEl = container.querySelector('.table-count');\n  const tbody = container.querySelector('tbody');\n  const ths = [...container.querySelectorAll('th')];\n\n  function filtered(){\n    let r = state.rows;\n    if(state.search){\n      const s = state.search.toLowerCase();\n      r = r.filter(row => columns.some(c => {\n        const v = c.searchValue ? c.searchValue(row) : (c.format ? c.format(row) : row[c.key]);\n        return String(v).replace(/<[^>]*>/g,'').toLowerCase().includes(s);\n      }));\n    }\n    if(state.sortKey){\n      const col = columns.find(c=>c.key===state.sortKey);\n      r = [...r].sort((a,b)=>{\n        let va = col.sortValue ? col.sortValue(a) : a[col.key];\n        let vb = col.sortValue ? col.sortValue(b) : b[col.key];\n        if(typeof va === 'string') va = va.toLowerCase();\n        if(typeof vb === 'string') vb = vb.toLowerCase();\n        if(va<vb) return state.sortDir==='asc'?-1:1;\n        if(va>vb) return state.sortDir==='asc'?1:-1;\n        return 0;\n      });\n    }\n    return r;\n  }\n\n  function render(){\n    const rows2 = filtered();\n    countEl.textContent = rows2.length.toLocaleString() + ' rows';\n    tbody.innerHTML = rows2.map(row=>{\n      const id = opts.rowId ? opts.rowId(row) : '';\n      return `<tr data-id=\"${esc(id)}\">${columns.map(c=>{\n        const val = c.format ? c.format(row) : esc(row[c.key]);\n        const cls = c.cellClass ? (typeof c.cellClass==='function'? c.cellClass(row): c.cellClass) : '';\n        return `<td class=\"${cls}\">${val}</td>`;\n      }).join('')}</tr>`;\n    }).join('') || `<tr><td colspan=\"${columns.length}\" style=\"color:var(--text-faint);padding:22px;text-align:center;font-family:var(--font-display);\">No matching rows</td></tr>`;\n    ths.forEach(th=>{\n      const col = columns.find(c=>c.key===th.dataset.key);\n      th.innerHTML = esc(col.label) + (state.sortKey===th.dataset.key ? `<span class=\"arrow\">${state.sortDir==='asc'?'\u25b2':'\u25bc'}</span>` : '');\n    });\n  }\n\n  searchInput.addEventListener('input', e=>{ state.search = e.target.value; render(); });\n  ths.forEach(th=>{\n    th.addEventListener('click', ()=>{\n      const key = th.dataset.key;\n      if(state.sortKey===key){ state.sortDir = state.sortDir==='asc'?'desc':'asc'; }\n      else { state.sortKey = key; state.sortDir = 'desc'; }\n      render();\n    });\n  });\n\n  render();\n\n  return {\n    setRows(newRows){ state.rows = newRows; render(); },\n    clearSearch(){ searchInput.value=''; state.search=''; render(); },\n    searchFor(query){\n      searchInput.value = query; state.search = query; render();\n      requestAnimationFrame(()=>{\n        const row = tbody.querySelector('tr[data-id]');\n        if(row){ row.classList.add('flash'); row.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>row.classList.remove('flash'), 1900); }\n      });\n    }\n  };\n}\n\n/* ---------------- jump / navigation ---------------- */\nfunction jumpTo(sectionId, opts={}){\n  const el = document.getElementById(sectionId);\n  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});\n  const ctrl = sectionControllers[sectionId];\n  if(!ctrl) return;\n  const delay = (opts.team && ctrl.setTeam) ? 380 : 60;\n  if(opts.team && ctrl.setTeam) ctrl.setTeam(opts.team);\n  if(opts.search && ctrl.table){ setTimeout(()=> ctrl.table.searchFor(opts.search), delay); }\n}\nwindow.jumpTo = jumpTo;\n\n/* ==================================================================\n   SIDEBAR\n   ================================================================== */\nfunction renderSidebar(){\n  const sb = document.getElementById('sidebar');\n  const sr = DATA.skillReport;\n  const ms = DATA.mistake;\n  const t = DATA.traffic;\n  const vol = DATA.volume;\n  const speed = DATA.speed;\n  const top = DATA.topPerformers;\n  const internalTot = sr.teamTotals.find(x=>normTeam(x.team)==='INTERNAL');\n  const outsourceTot = sr.teamTotals.find(x=>normTeam(x.team)==='OUTSOURCE');\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  const topMistake = ms.insights.topMistakeAgents[0];\n  const hc = DATA.headcount || {groups:[], total:0};\n  const hcBreakdown = hc.groups.map(g=>`${g.active}${g.vacation?('+'+g.vacation+' vac'):''} ${esc(g.label)}`).join(' \u00b7 ');\n  const bestPerformer = top[0];\n  const at = DATA.attendance || {agents:[], totals:{attendanceRate:0,punctualityRate:0,lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,extraBreakDays:0,extraBreakMinTotal:0}, remarks:[], insights:{}};\n\n  sb.innerHTML = `\n    <div class=\"card\">\n      <div class=\"eyebrow-badge\">${esc(DATA.meta.monthLong.toUpperCase())} \u00b7 ${esc(DATA.meta.region)} MONTHLY REPORT</div>\n      <div class=\"exec-title\">Executive Summary</div>\n      <div class=\"exec-sub\">Traffic, skill, speed &amp; QA quality in one view</div>\n      <div class=\"exec-para\">\n        Current headcount stands at <strong>${hc.total}</strong> (${hcBreakdown || 'no status data on file'}), counting only Active and Vacation. In ${esc(DATA.meta.monthLong)}, the team fielded <strong>${fmtInt(vol.current.total)}</strong> total chats (${pctDeltaHtml(vol.momTotalPct)}) across <strong>${t.brands.filter(b=>b&&b!=='-').length}</strong> brands, split <strong>${fmtInt(vol.current.agent)}</strong> agent-handled and <strong>${fmtInt(vol.current.bot)}</strong> bot-handled for an automation rate of <strong>${Number(vol.current.autoPct||0).toFixed(1)}%</strong>${vol.momAutoPtsChange===null?'':(' ('+(vol.momAutoPtsChange>=0?'+':'')+Number(vol.momAutoPtsChange).toFixed(1)+' pts vs last month)')}. On service levels, <strong>Internal</strong> averaged ${dashOr(internalTot?internalTot.frt:null)} FRT / ${dashOr(internalTot?internalTot.mrt:null)} MRT${outsourceTot?(' versus <strong>Outsource</strong> at '+dashOr(outsourceTot.frt)+' FRT / '+dashOr(outsourceTot.mrt)+' MRT'):''}. Team-wide latency averaged <strong>${fmtSec(speed.avgFrt)}</strong> FRT and <strong>${fmtSec(speed.avgMrt)}</strong> MRT, with <strong>${Number(speed.frtCompliancePct||0).toFixed(0)}%</strong> of agents meeting the 60s FRT target and <strong>${Number(speed.mrtCompliancePct||0).toFixed(0)}%</strong> the 120s MRT target. ${bestPerformer?('<strong>'+esc(bestPerformer.name)+'</strong> led all agents with <strong>'+fmtInt(bestPerformer.totalChat)+'</strong> chats handled'+((top[1]&&top[2])?(', ahead of '+esc(top[1].name)+' ('+fmtInt(top[1].totalChat)+') and '+esc(top[2].name)+' ('+fmtInt(top[2].totalChat)+')'):'')+'. '):'No agent chat volume was recorded this month. '}On quality, <strong>${fmtInt(ms.totalErrors)}</strong> QA errors were logged${ms.mostCommonMistake?(', led by <strong>'+esc(ms.mostCommonMistake.type)+'</strong> ('+ms.mostCommonMistake.count+' instances)'):''}${topMistake?(', with <strong>'+esc(topMistake.name)+'</strong> logging the most overall ('+topMistake.total+')'):''}. ${(DATA.takeaways&&DATA.takeaways.length)?('<strong>Key takeaway:</strong> '+esc(DATA.takeaways[0])+' '):''}Full breakdowns are laid out to the right; click any card below to jump straight to the data.\n      </div>\n    </div>\n\n    ${hc.groups.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Headcount (Active + Vacation)<span class=\"line\"></span></div>\n      ${hc.groups.map(g=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${g.active+g.vacation}</span>\n          <span><b>${esc(g.label)}:</b> ${g.activeAff>0?(g.activeCs+'cs + '+g.activeAff+' aff active'):(g.active+' active')}${g.vacation?(', '+g.vacation+' on vacation'):''}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    ${DATA.remarks.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Team Remarks This Month<span class=\"line\"></span></div>\n      ${DATA.remarks.slice(0,8).map(r=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${esc(r.team)} \u00b7 Wk${esc(r.week)}</span>\n          <span><b>${esc(r.agent)}:</b> ${esc(r.text)}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    <div class=\"nav-section-title\">Report sections \u2014 click to explore</div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('traffic')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">1 \u00b7 Traffic Summary</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Bot dominance: roughly ${autoPct}% of chats resolved without agent intervention this month. Full day-by-day, per-brand data is linked on the right.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${fmtInt(totalAssigned)}</b> agent-assigned</span>\n        <span class=\"mini-stat good\"><b>${fmtInt(totalBot)}</b> bot-handled</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('skill')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">2 \u00b7 Skill Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal vs Outsource \u2014 First Response (FRT) and Second Response (MRT) compared side by side.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>Internal</b> ${dashOr(internalTot?internalTot.frt:null)} FRT \u00b7 ${dashOr(internalTot?internalTot.mrt:null)} MRT</span>\n        <span class=\"mini-stat\"><b>Outsource</b> ${dashOr(outsourceTot?outsourceTot.frt:null)} FRT \u00b7 ${dashOr(outsourceTot?outsourceTot.mrt:null)} MRT</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('mistake')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">3 \u00b7 Mistake Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">QA errors broken down by team and agent${ms.mostCommonMistake?(', most commonly '+esc(ms.mostCommonMistake.type)):''}. Click through for the full per-agent breakdown.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${ms.totalErrors>0?'crit':'good'}\"><b>${fmtInt(ms.totalErrors)}</b> QA errors</span>\n        ${topMistake?('<span class=\"mini-stat\"><b>'+topMistake.total+'</b> \u00b7 '+esc(topMistake.name)+'</span>'):''}\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('speed')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">4 \u00b7 Speed / Latency</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Share of agents meeting the FRT (&le;60s) and MRT (&le;120s) SLA targets this month.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${speed.frtCompliancePct>=70?'good':speed.frtCompliancePct>=40?'warn':'crit'}\"><b>${speed.frtCompliancePct.toFixed(0)}%</b> meet FRT target</span>\n        <span class=\"mini-stat ${speed.mrtCompliancePct>=70?'good':speed.mrtCompliancePct>=40?'warn':'crit'}\"><b>${speed.mrtCompliancePct.toFixed(0)}%</b> meet MRT target</span>\n      </div>\n    </div>\n\n    ${at.agents.length ? `\n    <div class=\"insight-card\" onclick=\"jumpTo('attendance')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">5 \u00b7 Attendance</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal CS only. ${at.totals.lateCount} late check-in(s), ${at.totals.earlyCount} early check-out(s), ${at.totals.extraBreakDays} agent-day(s) over the break allowance.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${at.totals.attendanceRate>=0.9?'good':at.totals.attendanceRate>=0.7?'warn':'crit'}\"><b>${(at.totals.attendanceRate*100).toFixed(0)}%</b> attendance rate</span>\n        <span class=\"mini-stat ${at.totals.punctualityRate>=0.8?'good':at.totals.punctualityRate>=0.5?'warn':'crit'}\"><b>${(at.totals.punctualityRate*100).toFixed(0)}%</b> punctuality rate</span>\n      </div>\n    </div>` : ''}\n\n    <div class=\"insight-card\" onclick=\"jumpTo('takeaways')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">6 \u00b7 Key Takeaways</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">${DATA.takeaways.length} auto-generated, month-over-month takeaways \u2014 volume, automation, and quality trends.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${DATA.takeaways.length}</b> takeaways</span>\n      </div>\n    </div>\n  `;\n}\n\n/* ==================================================================\n   MAIN SECTIONS\n   ================================================================== */\nfunction barRow(label, value, max, colorCls=''){\n  const pct = max>0 ? Math.max(2, (value/max*100)) : 0;\n  return `<div class=\"bar-row\">\n    <div class=\"lbl\" title=\"${esc(label)}\">${esc(label)}</div>\n    <div class=\"bar-track\"><div class=\"bar-fill ${colorCls}\" style=\"width:${pct}%\"></div></div>\n    <div class=\"bar-val\">${typeof value === 'number' && value<=1 ? (value*100).toFixed(0)+'%' : fmtInt(value)}</div>\n  </div>`;\n}\n\n/* ---- 01 \u00b7 Traffic ---- */\nfunction renderTraffic(){\n  const t = DATA.traffic;\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  return `\n  <section class=\"section\" id=\"traffic\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">01</span><span class=\"section-title\">Traffic Summary</span></div>\n    <div class=\"section-desc\">${esc(t.summary)} Day-by-day, per-brand breakdown below.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Assigned</div><div class=\"stat-value blue\">${fmtInt(totalAssigned)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(totalBot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${autoPct}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Brands Tracked</div><div class=\"stat-value\">${t.brands.filter(b=>b && b!=='-').length}</div></div>\n    </div>\n    <div class=\"tabs\" id=\"trafficModeTabs\">\n      <button class=\"tab-btn active\" data-mode=\"assigned\">Agent-Assigned</button>\n      <button class=\"tab-btn\" data-mode=\"bot\">Bot-Handled</button>\n    </div>\n    <div class=\"bar-list\" id=\"trafficBars\"></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Day-by-day breakdown<span class=\"line\"></span></div>\n    <div id=\"trafficTable\"></div>\n  </section>`;\n}\nfunction mountTraffic(){\n  const t = DATA.traffic;\n  const brands = t.brands.filter(b=>b && b!=='-');\n  const barsEl = document.getElementById('trafficBars');\n  const tableEl = document.getElementById('trafficTable');\n  if(!t.assignedDays.length){ tableEl.innerHTML = '<div style=\"color:var(--text-faint);padding:14px 0\">No daily data for this month</div>'; barsEl.innerHTML=''; sectionControllers.traffic={}; return; }\n\n  const columns = [\n    { key:'day', label:'Day', cellClass:'name-cell', sortValue:r=>{ const m=String(r.day).match(/(\\d+)\\s*$/); return m?parseInt(m[1],10):0; } },\n    ...brands.map(b => ({ key:b, label:b, format:r=>fmtInt(r[b]), sortValue:r=>Number(r[b])||0 }))\n  ];\n  const table = createTable(tableEl, columns, t.assignedDays, { searchPlaceholder:'Search by day\u2026', rowId:r=>r.day, defaultSort:{key:'day', dir:'asc'} });\n\n  function renderBars(mode){\n    const totals = mode==='assigned' ? t.totalsAssigned : t.totalsBot;\n    const arr = brands.map(b=>({b, v:Number(totals[b])||0})).sort((a,b)=>b.v-a.v);\n    const max = arr[0]?.v || 1;\n    barsEl.innerHTML = arr.map(x=>barRow(x.b, x.v, max, mode==='bot'?'':'amber')).join('');\n  }\n  renderBars('assigned');\n\n  document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(btn=>{\n    btn.addEventListener('click', ()=>{\n      document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(b=>b.classList.remove('active'));\n      btn.classList.add('active');\n      const mode = btn.dataset.mode;\n      renderBars(mode);\n      table.setRows(mode==='assigned' ? t.assignedDays : t.botDays);\n    });\n  });\n\n  sectionControllers.traffic = { table };\n}\n\n/* ---- 02 \u00b7 Volume (trend chart, agent vs bot, MoM) ---- */\nfunction renderVolume(){\n  const v = DATA.volume;\n  return `\n  <section class=\"section\" id=\"volume\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Volume</span></div>\n    <div class=\"section-desc\">Total chat volume trend for the year, agent vs bot split, and how this month compares to last month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Chats (${esc(DATA.meta.month)})</div><div class=\"stat-value blue\">${fmtInt(v.current.total)}</div><div class=\"stat-foot\">${pctDeltaHtml(v.momTotalPct)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Handled</div><div class=\"stat-value\">${fmtInt(v.current.agent)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(v.current.bot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${v.current.autoPct.toFixed(1)}%</div>\n        <div class=\"stat-foot\">${v.momAutoPtsChange===null?'no prior month':((v.momAutoPtsChange>=0?'\u25b2 ':'\u25bc ')+Math.abs(v.momAutoPtsChange).toFixed(1)+' pts vs last month')}</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"volumeChart\"></canvas></div>\n  </section>`;\n}\nfunction mountVolume(){\n  const v = DATA.volume;\n  const ctx = document.getElementById('volumeChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  if(charts.volume) charts.volume.destroy();\n  charts.volume = new Chart(ctx, {\n    type:'line',\n    data:{\n      labels: v.monthlyTrend.map(r=>r.month),\n      datasets:[\n        { label:'Agent', data:v.monthlyTrend.map(r=>r.agent), borderColor:themeColor('--blue'), backgroundColor:themeColor('--blue'), tension:.35, pointRadius:3, fill:false },\n        { label:'Bot', data:v.monthlyTrend.map(r=>r.bot), borderColor:themeColor('--teal'), backgroundColor:themeColor('--teal'), tension:.35, pointRadius:3, fill:false }\n      ]\n    },\n    options:{\n      responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{\n        x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} },\n        y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), callback:v=>fmtInt(v)} }\n      }\n    }\n  });\n  sectionControllers.volume = {};\n}\n\n/* ---- 03 \u00b7 SLA Performance (was \"Skill Reports\") ---- */\nfunction teamTabsHtml(teams, activeIdx=0){\n  return `<div class=\"tabs\">${teams.map((t,i)=>`<button class=\"tab-btn ${i===activeIdx?'active':''}\" data-idx=\"${i}\">${normTeam(t.team)}</button>`).join('')}</div>`;\n}\nfunction renderSkill(){\n  const sr = DATA.skillReport;\n  return `\n  <section class=\"section\" id=\"skill\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Skill Reports</span></div>\n    <div class=\"section-desc\">${esc(sr.summary)}</div>\n    <div class=\"stat-grid\" id=\"skillStats\"></div>\n    <div class=\"chart-wrap\" style=\"height:220px\"><canvas id=\"skillChart\"></canvas></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Top 10 Agents \u2014 Internal + Outsource<span class=\"line\"></span></div>\n    <div id=\"skillTable\"></div>\n  </section>`;\n}\nfunction mountSkill(){\n  const sr = DATA.skillReport;\n  const statsEl = document.getElementById('skillStats');\n  const tableEl = document.getElementById('skillTable');\n\n  mountSkillChartOnly_();\n\n  // Overall team totals shown side by side (Internal + Outsource) \u2014 no more\n  // per-team tabs, since the agent table below always combines both teams\n  // into one ranked Top 10 list.\n  statsEl.innerHTML = sr.teamTotals.map(t=>`\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} Total Chat</div><div class=\"stat-value blue\">${fmtInt(t.totalChat)}</div></div>\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} FRT / MRT</div><div class=\"stat-value\">${dashOr(t.frt)} / ${dashOr(t.mrt)}</div></div>\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} CSAT</div><div class=\"stat-value ${(t.csat??0)>=0.6?'teal':(t.csat??0)>=0.4?'amber':'red'}\">${((t.csat??0)*100).toFixed(0)}%</div></div>\n  `).join('');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n    { key:'frt', label:'FRT', format:r=>dashOr(r.frt), sortValue:r=>parseTimeStr(r.frt) },\n    { key:'mrt', label:'MRT', format:r=>dashOr(r.mrt), sortValue:r=>parseTimeStr(r.mrt) },\n    { key:'aht', label:'AHT', format:r=>dashOr(r.aht), sortValue:r=>parseTimeStr(r.aht) },\n    { key:'csat', label:'CSAT', format:r=>csatPill(r.csat), sortValue:r=>num(r.csat)??-1 },\n  ];\n\n  // Combine every team's agents into one pool, tag each with its team label,\n  // then rank Internal + Outsource together and keep only the Top 10 by total\n  // chats handled \u2014 this replaces the old per-team tabs + full agent list.\n  const allAgents = [];\n  sr.teams.forEach(team=> team.agents.forEach(a=> allAgents.push(Object.assign({}, a, { team: normTeam(team.team) }))));\n  const top10 = [...allAgents].sort((a,b)=>(num(b.totalChat)??-1)-(num(a.totalChat)??-1)).slice(0,10);\n\n  const table = createTable(tableEl, columns, top10, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n\n  sectionControllers.skill = { table };\n}\nfunction mountSkillChartOnly_(){\n  const sr = DATA.skillReport;\n  const chartCtx = document.getElementById('skillChart');\n  if(!chartCtx || typeof Chart==='undefined') return;\n  if(charts.skill) charts.skill.destroy();\n  const labels = sr.teamTotals.map(t=>normTeam(t.team));\n  charts.skill = new Chart(chartCtx, {\n    type:'bar',\n    data:{ labels, datasets:[\n      { label:'FRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.frt)<0?0:parseTimeStr(t.frt)), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.mrt)<0?0:parseTimeStr(t.mrt)), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n}\n\n/* ---- 04 \u00b7 Top Performers ---- */\nfunction renderTopPerformers(){\n  return `\n  <section class=\"section\" id=\"performers\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Top Performers</span></div>\n    <div class=\"section-desc\">Top agents this month, ranked by total chats handled (Internal + Outsource combined).</div>\n    <div class=\"chart-wrap chart-scroll\" id=\"performersChartWrap\"><div id=\"performersChartInner\"><canvas id=\"performersChart\"></canvas></div></div>\n    <div id=\"performersTable\"></div>\n  </section>`;\n}\nfunction mountTopPerformers(){\n  const top = DATA.topPerformers;\n  const ctx = document.getElementById('performersChart');\n  const inner = document.getElementById('performersChartInner');\n  if(inner) inner.style.height = Math.max(280, top.length*32) + 'px';\n  if(ctx && typeof Chart!=='undefined' && top.length){\n    if(charts.performers) charts.performers.destroy();\n    charts.performers = new Chart(ctx, {\n      type:'bar',\n      data:{ labels: top.map(a=>a.name), datasets:[{ label:'Total Chats', data:top.map(a=>a.totalChat), backgroundColor:top.map(a=>a.team==='Outsource Team'?themeColor('--amber'):themeColor('--blue')) }] },\n      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,\n        plugins:{ legend:{ display:false } },\n        scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n      }\n    });\n  }\n  const columns = [\n    { key:'rank', label:'#', format:r=>String(top.indexOf(r)+1) },\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n  ];\n  const tableEl = document.getElementById('performersTable');\n  const table = createTable(tableEl, columns, top, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n  sectionControllers.performers = { table };\n}\n\n/* ---- 05 \u00b7 Speed / Latency ---- */\nfunction renderSpeed(){\n  const s = DATA.speed;\n  return `\n  <section class=\"section\" id=\"speed\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Speed / Latency</span></div>\n    <div class=\"section-desc\">First Response (FRT \u226460s target) and Second Response (MRT \u2264120s target) compliance across all agents with chats this month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg FRT</div><div class=\"stat-value amber\">${fmtSec(s.avgFrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg MRT</div><div class=\"stat-value blue\">${fmtSec(s.avgMrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg AHT</div><div class=\"stat-value\">${fmtSec(s.avgAht)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">FRT Target Met</div><div class=\"stat-value ${s.frtCompliancePct>=70?'teal':s.frtCompliancePct>=40?'amber':'red'}\">${s.frtCompliancePct.toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">MRT Target Met</div><div class=\"stat-value ${s.mrtCompliancePct>=70?'teal':s.mrtCompliancePct>=40?'amber':'red'}\">${s.mrtCompliancePct.toFixed(0)}%</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"speedChart\"></canvas></div>\n  </section>`;\n}\nfunction mountSpeed(){\n  const s = DATA.speed;\n  const ctx = document.getElementById('speedChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  const top = [...s.agents].sort((a,b)=>b.frtSec-a.frtSec).slice(0,15);\n  if(charts.speed) charts.speed.destroy();\n  charts.speed = new Chart(ctx, {\n    type:'bar',\n    data:{ labels: top.map(a=>a.name), datasets:[\n      { label:'FRT (sec)', data:top.map(a=>a.frtSec), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:top.map(a=>a.mrtSec), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), maxRotation:60, minRotation:60, font:{size:9} } }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n  sectionControllers.speed = {};\n}\n\n/* ---- 05 \u00b7 Attendance (Internal CS only) ---- */\nfunction fmtMin_(totalMin){ if(totalMin===undefined||totalMin===null||isNaN(totalMin)||totalMin<0) return '\u2014'; var h=Math.floor(totalMin/60), m=Math.round(totalMin-h*60); if(m>=60){h+=1;m-=60;} return h+'.'+(m<10?'0'+m:m)+'h'; }\nfunction renderAttendance(){\n  const at = DATA.attendance;\n  if(!at || !at.agents || !at.agents.length){\n    return `\n  <section class=\"section\" id=\"attendance\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Attendance</span></div>\n    <div class=\"section-desc\">Internal CS only \u2014 Outsource attendance isn't tracked.</div>\n    <div class=\"callout-box\" style=\"color:var(--text-faint)\">No attendance data on file for this month.</div>\n  </section>`;\n  }\n  const topLate = at.insights && at.insights.topLateAgent;\n  const topExtra = at.insights && at.insights.topExtraBreakAgent;\n  return `\n  <section class=\"section\" id=\"attendance\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Attendance</span></div>\n    <div class=\"section-desc\">${esc(at.summary)} Internal CS only \u2014 Outsource attendance isn't tracked.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Attendance Rate</div><div class=\"stat-value blue\">${(at.totals.attendanceRate*100).toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Punctuality Rate</div><div class=\"stat-value teal\">${(at.totals.punctualityRate*100).toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Late Check-In</div><div class=\"stat-value amber\">${at.totals.lateCount}</div><div class=\"stat-foot\">${fmtMin_(at.totals.lateMinTotal)} total</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Early Check-Out</div><div class=\"stat-value red\">${at.totals.earlyCount}</div><div class=\"stat-foot\">${fmtMin_(at.totals.earlyMinTotal)} total</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Extra Break (&gt;90min)</div><div class=\"stat-value red\">${at.totals.extraBreakDays}</div><div class=\"stat-foot\">${fmtMin_(at.totals.extraBreakMinTotal)} over allowance</div></div>\n    </div>\n    <div id=\"attendanceTable\"></div>\n    ${at.remarks.length ? `\n    <div class=\"card-title\" style=\"margin-top:14px;\">Attendance Remarks / Exceptions<span class=\"line\"></span></div>\n    <ul class=\"callout-list\">\n      ${at.remarks.slice(0,20).map(r=>`<li style=\"cursor:default\"><span><span class=\"cl-name\">${esc(r.name)}</span><span class=\"cl-id\">${esc(r.date)} \u00b7 ${esc(r.psdId)}</span></span><span style=\"color:var(--amber);font-size:11.5px;max-width:340px;text-align:right\">${esc(r.remark)}</span></li>`).join('')}\n    </ul>` : ''}\n  </section>`;\n}\nfunction mountAttendance(){\n  const at = DATA.attendance;\n  const tableEl = document.getElementById('attendanceTable');\n  if(!tableEl || !at || !at.agents || !at.agents.length) return;\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'daysPresent', label:'Days Present', sortValue:r=>num(r.daysPresent)??0 },\n    { key:'daysOff', label:'Days Off', sortValue:r=>num(r.daysOff)??0 },\n    { key:'attendanceRate', label:'Attendance %', format:r=>(r.attendanceRate*100).toFixed(0)+'%', sortValue:r=>r.attendanceRate },\n    { key:'lateCount', label:'Late', sortValue:r=>num(r.lateCount)??0 },\n    { key:'earlyCount', label:'Early Out', sortValue:r=>num(r.earlyCount)??0 },\n    { key:'extraBreakDays', label:'Extra Break (d)', sortValue:r=>num(r.extraBreakDays)??0 },\n    { key:'avgWorkDurationMin', label:'Avg Work', format:r=>fmtMin_(r.avgWorkDurationMin), sortValue:r=>r.avgWorkDurationMin },\n  ];\n  const table = createTable(tableEl, columns, at.agents, { rowId:r=>r.id, defaultSort:{key:'daysPresent', dir:'desc'} });\n  sectionControllers.attendance = { table };\n}\n\n/* ---- 06 \u00b7 Key Takeaways ---- */\nfunction renderTakeaways(){\n  return `\n  <section class=\"section\" id=\"takeaways\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">06</span><span class=\"section-title\">Key Takeaways</span></div>\n    <div class=\"section-desc\">Auto-generated, month-over-month observations \u2014 volume, automation, and quality trends.</div>\n    <div class=\"callout-box\">\n      <ul class=\"callout-list\" style=\"display:flex;flex-direction:column;gap:10px\">\n        ${DATA.takeaways.map((tk,i)=>`<li style=\"cursor:default;justify-content:flex-start;align-items:flex-start;gap:10px\"><span class=\"change-num\" style=\"margin-top:2px;flex-shrink:0\">${i+1}</span><span style=\"white-space:normal;text-align:left;color:var(--text-dim)\">${esc(tk)}</span></li>`).join('')}\n      </ul>\n    </div>\n  </section>`;\n}\n\n/* ---- shared: Mistake Reports (QA) ---- */\nfunction renderMistake(){\n  const ms = DATA.mistake;\n  const maxType = Math.max(1, ...ms.mistakeTypeCounts.map(m=>m.count));\n  return `\n  <section class=\"section\" id=\"mistake\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">03</span><span class=\"section-title\">Mistake Reports</span></div>\n    <div class=\"section-desc\">${esc(ms.summary)}</div>\n    <div class=\"callout-grid\">\n      <div class=\"callout-box\">\n        <h4>Most Common Errors (All Teams)</h4>\n        <div class=\"bar-list\">\n          ${ms.mistakeTypeCounts.filter(m=>m.count>0).sort((a,b)=>b.count-a.count).map(m=>barRow(m.label, m.count, maxType, 'amber')).join('') || '<div style=\"color:var(--text-faint);font-size:12.5px\">No errors logged this month</div>'}\n        </div>\n      </div>\n      <div class=\"callout-box\">\n        <h4>Agents With Highest Mistakes</h4>\n        <ul class=\"callout-list\">\n          ${ms.insights.topMistakeAgents.slice(0,6).map(a=>`\n            <li onclick=\"jumpTo('mistake',{team:'${esc(a.team)}', search:'${esc(a.id)}'})\">\n              <span><span class=\"cl-name\">${esc(a.name)}</span><span class=\"cl-id\">${esc(a.id)} \u00b7 ${esc(a.team)}</span></span>\n              <span class=\"cl-val\" style=\"color:var(--red)\">${a.total}</span>\n            </li>`).join('') || '<li style=\"color:var(--text-faint)\">No mistakes logged this month</li>'}\n        </ul>\n      </div>\n    </div>\n    <div id=\"mistakeTabs\"></div>\n    <div class=\"stat-grid\" id=\"mistakeStats\"></div>\n    <div id=\"mistakeTable\"></div>\n  </section>`;\n}\nfunction mountMistake(){\n  const ms = DATA.mistake;\n  const totalsByTeam = {};\n  ms.teamTotals.forEach(t=> totalsByTeam[normTeam(t.team)] = t);\n  const tabsEl = document.getElementById('mistakeTabs');\n  const statsEl = document.getElementById('mistakeStats');\n  const tableEl = document.getElementById('mistakeTable');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'notFollowSOP', label:'Not SOP', format:r=>countPill(r.notFollowSOP,1,3), sortValue:r=>num(r.notFollowSOP)??0 },\n    { key:'wrongInfo', label:'Wrong Info', format:r=>countPill(r.wrongInfo,1,3), sortValue:r=>num(r.wrongInfo)??0 },\n    { key:'noSolution', label:'No Solution', format:r=>countPill(r.noSolution,1,3), sortValue:r=>num(r.noSolution)??0 },\n    { key:'noExplanation', label:'No Explanation', format:r=>countPill(r.noExplanation,1,3), sortValue:r=>num(r.noExplanation)??0 },\n    { key:'lateReply', label:'Late Reply', format:r=>fmtInt(r.lateReply), sortValue:r=>num(r.lateReply)??0 },\n    { key:'noReply', label:'No Reply', format:r=>fmtInt(r.noReply), sortValue:r=>num(r.noReply)??0 },\n    { key:'angry', label:'Unprofessional', format:r=>fmtInt(r.angry), sortValue:r=>num(r.angry)??0 },\n    { key:'verbalWarning', label:'Verbal Warn.', format:r=>fmtInt(r.verbalWarning), sortValue:r=>num(r.verbalWarning)??0 },\n    { key:'warningLetter', label:'Warning Letter', format:r=>fmtInt(r.warningLetter), sortValue:r=>num(r.warningLetter)??0 },\n    { key:'total', label:'Total', format:r=>countPill(r.total,3,7), sortValue:r=>num(r.total)??0 },\n  ];\n  let table = null;\n\n  function renderStats(idx){\n    const team = ms.teams[idx];\n    const tot = totalsByTeam[normTeam(team.team)];\n    statsEl.innerHTML = tot ? `\n      <div class=\"stat-card\"><div class=\"stat-label\">Not Follow SOP</div><div class=\"stat-value amber\">${fmtInt(tot.notFollowSOP)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Wrong Information</div><div class=\"stat-value red\">${fmtInt(tot.wrongInfo)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Solution</div><div class=\"stat-value\">${fmtInt(tot.noSolution)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Explanation</div><div class=\"stat-value\">${fmtInt(tot.noExplanation)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Errors</div><div class=\"stat-value blue\">${fmtInt(tot.total)}</div></div>\n    ` : '';\n  }\n\n  function setTeam(idxOrName){\n    let idx = idxOrName;\n    if(typeof idxOrName === 'string'){\n      idx = ms.teams.findIndex(t=> normTeam(t.team)===normTeam(idxOrName));\n      if(idx<0) idx = 0;\n    }\n    tabsEl.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.idx)===idx));\n    renderStats(idx);\n    if(table) table.setRows(ms.teams[idx].agents); else table = createTable(tableEl, columns, ms.teams[idx].agents, { rowId:r=>r.id, defaultSort:{key:'total', dir:'desc'} });\n  }\n\n  tabsEl.innerHTML = teamTabsHtml(ms.teams, 0);\n  tabsEl.querySelectorAll('.tab-btn').forEach(btn=> btn.addEventListener('click', ()=> setTeam(Number(btn.dataset.idx))));\n  setTeam(0);\n\n  sectionControllers.mistake = { setTeam, get table(){ return table; } };\n}\n\n/* ==================================================================\n   GLOBAL SEARCH (agents only \u2014 searches the SLA Performance roster)\n   ================================================================== */\nfunction buildGlobalIndex(){\n  const idx = [];\n  const seen = new Set();\n  DATA.skillReport.teams.forEach(t=> t.agents.forEach(a=>{\n    if(seen.has(a.id)) return; seen.add(a.id);\n    idx.push({ id:a.id, name:a.name, team:normTeam(t.team), section:'skill' });\n  }));\n  return idx;\n}\nfunction mountGlobalSearch(){\n  const idx = buildGlobalIndex();\n  const input = document.getElementById('globalSearch');\n  const results = document.getElementById('globalResults');\n  function render(q){\n    const s = q.trim().toLowerCase();\n    if(!s){ results.classList.remove('show'); results.innerHTML=''; return; }\n    const matches = idx.filter(r => r.id.toLowerCase().includes(s) || r.name.toLowerCase().includes(s)).slice(0,10);\n    results.innerHTML = matches.length ? matches.map(r=>`\n      <div class=\"gr-item\" data-id=\"${esc(r.id)}\" data-team=\"${esc(r.team)}\" data-section=\"${r.section}\">\n        <span class=\"gr-name\">${esc(r.name)}</span>\n        <span class=\"gr-meta\">${esc(r.id)} \u00b7 ${esc(r.team)}</span>\n      </div>`).join('') : `<div class=\"gr-empty\">No agent matches \"${esc(q)}\"</div>`;\n    results.classList.add('show');\n  }\n  input.addEventListener('input', e=> render(e.target.value));\n  input.addEventListener('focus', e=> { if(e.target.value) render(e.target.value); });\n  document.addEventListener('click', e=>{ if(!e.target.closest('.global-search')) results.classList.remove('show'); });\n  results.addEventListener('click', e=>{\n    const item = e.target.closest('.gr-item');\n    if(!item) return;\n    jumpTo('skill', { team: item.dataset.team, search: item.dataset.id });\n    results.classList.remove('show');\n    input.value = '';\n  });\n}\n\n/* ==================================================================\n   THEME TOGGLE (re-renders charts so their colors track the theme)\n   ================================================================== */\nfunction mountThemeToggle(){\n  const btn = document.getElementById('themeToggle');\n  const html = document.documentElement;\n  const stored = localStorage.getItem('ops-theme') || 'dark';\n  html.setAttribute('data-theme', stored);\n  btn.textContent = stored === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n  btn.addEventListener('click', ()=>{\n    const current = html.getAttribute('data-theme');\n    const next = current === 'light' ? 'dark' : 'light';\n    html.setAttribute('data-theme', next);\n    localStorage.setItem('ops-theme', next);\n    btn.textContent = next === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n    mountSpeed(); mountSkillChartOnly_();\n  });\n}\n\n/* ==================================================================\n   BOOT\n   ================================================================== */\nfunction boot(){\n  const brandEl = document.querySelector('.topbar .brand');\n  if(brandEl) brandEl.innerHTML = '<span class=\"dot\"></span> '+esc(DATA.meta.region)+' Monthly Operational Report <span class=\"sub\">\u2014 '+esc(DATA.meta.monthLong)+'</span>';\n  renderSidebar();\n  const main = document.getElementById('main');\n  main.innerHTML = renderTraffic() + renderSkill() + renderMistake() + renderSpeed() + renderAttendance() + renderTakeaways() +\n    `<div class=\"footer-note\">Generated from ${esc(DATA.meta.region)} Google Sheet \u00b7 ${esc(DATA.meta.monthLong)} report \u00b7 ${esc(DATA.meta.generatedAt)}</div>`;\n  mountTraffic();\n  mountSkill();\n  mountMistake();\n  mountSpeed();\n  mountAttendance();\n  mountGlobalSearch();\n  mountThemeToggle();\n}\nboot();\n";
 
 function buildMonthReportHtml_(month){
   var MONTHS_LONG={Jan:'January',Feb:'February',Mar:'March',Apr:'April',May:'May',Jun:'June',Jul:'July',Aug:'August',Sep:'September',Oct:'October',Nov:'November',Dec:'December'};
@@ -1802,10 +1943,57 @@ function buildMonthReportHtml_(month){
   }
   if(!takeaways.length) takeaways.push('Not enough data available yet to generate month-over-month takeaways.');
 
+  // ── ATTENDANCE (Internal CS only — Outsource isn't tracked). Uses the same
+  // month-filter vocabulary ("Jan".."Dec") as the live Attendance page, so this
+  // reuses attAggregateForFilter_ / attFilterRemarks_ directly instead of
+  // re-deriving anything. Silently empty (not an error) for regions/months
+  // with no attendance sheet wired up yet. ──
+  function attMonthTotals_(agents){
+    var t=agents.reduce(function(acc,a){
+      acc.daysPresent+=a.daysPresent; acc.daysInMonth+=a.daysInMonth; acc.daysOff+=a.daysOff;
+      acc.lateCount+=a.lateCount; acc.lateMinTotal+=a.lateMinTotal;
+      acc.earlyCount+=a.earlyCount; acc.earlyMinTotal+=a.earlyMinTotal;
+      acc.extraBreakDays+=a.extraBreakDays; acc.extraBreakMinTotal+=a.extraBreakMinTotal;
+      acc.workDurationMinTotal+=a.workDurationMinTotal;
+      return acc;
+    },{daysPresent:0,daysInMonth:0,daysOff:0,lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,extraBreakDays:0,extraBreakMinTotal:0,workDurationMinTotal:0});
+    t.attendanceRate=t.daysInMonth>0?(t.daysPresent/t.daysInMonth):0;
+    t.punctualityRate=t.daysPresent>0?((t.daysPresent-t.lateCount)/t.daysPresent):0;
+    t.avgWorkDurationMin=t.daysPresent>0?(t.workDurationMinTotal/t.daysPresent):0;
+    return t;
+  }
+  var attMonthAgents=(attParsed&&attParsed.monthList&&attParsed.monthList.indexOf(month)>=0)?attAggregateForFilter_(attParsed,month):[];
+  var attRemarksMonth=(attParsed&&attParsed.remarks)?attFilterRemarks_(attParsed,month,'all'):[];
+  var attTotals=attMonthTotals_(attMonthAgents);
+  var attTopLate=attMonthAgents.length?[...attMonthAgents].sort(function(a,b){return b.lateCount-a.lateCount;})[0]:null;
+  var attTopExtraBreak=attMonthAgents.length?[...attMonthAgents].sort(function(a,b){return b.extraBreakDays-a.extraBreakDays;})[0]:null;
+  var attendanceSummary=attMonthAgents.length?
+    ('Internal CS attendance rate was '+(attTotals.attendanceRate*100).toFixed(0)+'% with a '+(attTotals.punctualityRate*100).toFixed(0)+'% punctuality rate across '+attMonthAgents.length+' agent(s) this month.'):
+    'No attendance data on file for this month.';
+  var attendanceData={
+    summary:attendanceSummary,
+    agents:attMonthAgents.map(function(a){return {id:a.psdId,name:a.name,daysPresent:a.daysPresent,daysOff:a.daysOff,attendanceRate:a.attendanceRate,lateCount:a.lateCount,lateMinTotal:a.lateMinTotal,earlyCount:a.earlyCount,earlyMinTotal:a.earlyMinTotal,extraBreakDays:a.extraBreakDays,extraBreakMinTotal:a.extraBreakMinTotal,avgWorkDurationMin:a.avgWorkDurationMin};}),
+    totals:attTotals,
+    remarks:attRemarksMonth.map(function(r){return {date:r.date,psdId:r.psdId,name:r.name,remark:r.remark};}),
+    insights:{topLateAgent:attTopLate?{id:attTopLate.psdId,name:attTopLate.name,lateCount:attTopLate.lateCount,lateMinTotal:attTopLate.lateMinTotal}:null,
+              topExtraBreakAgent:(attTopExtraBreak&&attTopExtraBreak.extraBreakDays>0)?{id:attTopExtraBreak.psdId,name:attTopExtraBreak.name,extraBreakDays:attTopExtraBreak.extraBreakDays,extraBreakMinTotal:attTopExtraBreak.extraBreakMinTotal}:null}
+  };
+  // Month-over-month attendance takeaways — same spirit as the volume/QA ones above.
+  if(attMonthAgents.length&&prevMonth&&attParsed&&attParsed.monthList&&attParsed.monthList.indexOf(prevMonth)>=0){
+    var attPrevTotals=attMonthTotals_(attAggregateForFilter_(attParsed,prevMonth));
+    if(attPrevTotals.daysInMonth>0){
+      takeaways.push('Internal CS attendance rate '+(attTotals.attendanceRate>=attPrevTotals.attendanceRate?'improved to':'declined to')+' '+(attTotals.attendanceRate*100).toFixed(0)+'% from '+(attPrevTotals.attendanceRate*100).toFixed(0)+'% in '+prevMonth+'.');
+    }
+  }
+  if(attMonthAgents.length){
+    takeaways.push('Attendance: '+attTotals.lateCount+' late check-in(s) totaling '+attFmtHM_(attTotals.lateMinTotal)+', '+attTotals.earlyCount+' early check-out(s) totaling '+attFmtHM_(attTotals.earlyMinTotal)+', and '+attTotals.extraBreakDays+' agent-day(s) with break time over the 90-minute allowance.'+(attTopLate&&attTopLate.lateCount>0?(' '+attTopLate.name+' had the most late check-ins ('+attTopLate.lateCount+').'):''));
+  }
+
   var DATA_OBJ={
     meta:{region:currentRegion,month:month,monthLong:monthLong,generatedAt:new Date().toLocaleString()},
     traffic:trafficData, skillReport:skillReportData, mistake:mistakeData, remarks:remarksForMonth,
-    headcount:headcountData, volume:volumeData, topPerformers:topPerformers, speed:speedData, takeaways:takeaways
+    headcount:headcountData, volume:volumeData, topPerformers:topPerformers, speed:speedData, takeaways:takeaways,
+    attendance:attendanceData
   };
   var dataJson=JSON.stringify(DATA_OBJ).replace(/</g,'\u003c'); // avoid a stray "</script" inside data from ending the tag early
 
@@ -2387,6 +2575,248 @@ function qaEntryMonth_(s){
   return m?(m[1].charAt(0).toUpperCase()+m[1].slice(1,3).toLowerCase()):null;
 }
 
+// ==========================================================================
+// ATTENDANCE — Internal CS only (Outsource attendance isn't tracked by us).
+// Source: a SEPARATE Google Sheet per region (own sheetId, see
+// REGION_CONFIG[region].attendanceSheetId), one tab, one row per agent per day.
+// Expected columns (matched by header text, order-independent):
+//   Date | PSD ID | Employee Name | Project | Shift | Check In | Late Check In |
+//   Check Out | Early Check Out | Work Duration | Total Break Time | Break Count |
+//   Short Break Time | Short Break Count | Special Break Time | Special Break Count | Remark
+// Business rules (per region owner):
+//   - Late Check In cell is either "On Time" or "Late N min"
+//   - Early Check Out cell is either "OK" or "Early N min"
+//   - "Extra Break" is NOT a sheet column — it's derived here: any day where
+//     Total Break Time exceeds 90 minutes, the minutes over 90 count as Extra
+//     Break time for that day (and that day counts toward Extra Break Days).
+//   - Short Break Time/Count are already computed in the sheet (breaks under
+//     5 min each) — tracked so frequent tiny "convenience" breaks that add up
+//     don't go unnoticed even though each one looks harmless alone.
+//   - A day with NO row at all for an agent counts as "Off" (not "Absent") —
+//     everyone gets 6 offs/month, so a missing day is not automatically a
+//     problem; Days Off = days in month − Days Present.
+// ==========================================================================
+var ATT_MO_IDX={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+var ATT_MO_ORDER=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var ATT_MO_DAYS_2026=[31,28,31,30,31,30,31,31,30,31,30,31]; // 2026 is not a leap year
+var ATT_EXTRA_BREAK_THRESHOLD_MIN=90;
+// A completed shift showing 0:00:00 Work Duration, or one exceeding this cap,
+// is treated as a likely missed/broken check-out rather than a real workday —
+// excluded from Avg Work Duration so one bad row doesn't skew the average,
+// but still counted as "present" and flagged separately for manual review.
+var ATT_MAX_REASONABLE_WORK_MIN=16*60;
+
+// "H:MM:SS" / "M:SS" / plain number -> total minutes (float)
+function attMinutes_(s){
+  var str=String(s===undefined||s===null?'':s).trim();
+  if(!str) return 0;
+  if(str.indexOf(':')>=0){
+    var parts=str.split(':').map(function(x){return parseFloat(x)||0;});
+    if(parts.length===3) return parts[0]*60+parts[1]+parts[2]/60;
+    if(parts.length===2) return parts[0]+parts[1]/60;
+  }
+  return parseFloat(str)||0;
+}
+function attIsLate_(s){ return /^late\b/i.test(String(s||'').trim()); }
+function attIsEarly_(s){ return /^early\b/i.test(String(s||'').trim()); }
+function attParseMin_(s){ var m=String(s||'').match(/(\d+)\s*min/i); return m?parseInt(m[1],10):0; }
+
+function parseAttendance(rows){
+  var out={ byAgentMonth:{}, monthList:[], rowsRaw:[], remarks:[], anomalies:[] };
+  if(!rows||!rows.length) return out;
+  var hdrIdx=-1,hdr=null;
+  for(var i=0;i<Math.min(rows.length,5);i++){
+    var r=rows[i]||[];
+    if(r.some(function(c){return /^psd(\s*id)?$/i.test(String(c||'').trim());})){hdrIdx=i;hdr=r;break;}
+  }
+  if(hdrIdx<0) return out;
+
+  var col={};
+  hdr.forEach(function(c,i){
+    var h=String(c||'').trim().toLowerCase();
+    if(!h) return;
+    if(col.date===undefined&&/^date$/.test(h)) col.date=i;
+    else if(col.psd===undefined&&/^psd/.test(h)) col.psd=i;
+    else if(col.name===undefined&&/employee|name/.test(h)) col.name=i;
+    else if(col.project===undefined&&/project/.test(h)) col.project=i;
+    else if(col.shift===undefined&&/shift/.test(h)) col.shift=i;
+    else if(col.checkIn===undefined&&/^check in$/.test(h)) col.checkIn=i;
+    else if(col.lateCheckIn===undefined&&/late check/.test(h)) col.lateCheckIn=i;
+    else if(col.checkOut===undefined&&/^check out$/.test(h)) col.checkOut=i;
+    else if(col.earlyCheckOut===undefined&&/early check/.test(h)) col.earlyCheckOut=i;
+    else if(col.workDuration===undefined&&/work duration/.test(h)) col.workDuration=i;
+    else if(col.totalBreak===undefined&&/^total break/.test(h)) col.totalBreak=i;
+    else if(col.breakCount===undefined&&/^break count$/.test(h)) col.breakCount=i;
+    else if(col.shortBreakTime===undefined&&/short break time/.test(h)) col.shortBreakTime=i;
+    else if(col.shortBreakCount===undefined&&/short break count/.test(h)) col.shortBreakCount=i;
+    else if(col.specialBreakTime===undefined&&/special break time/.test(h)) col.specialBreakTime=i;
+    else if(col.specialBreakCount===undefined&&/special break count/.test(h)) col.specialBreakCount=i;
+    else if(col.remark===undefined&&/remark/.test(h)) col.remark=i;
+  });
+  if(col.psd===undefined) return out;
+
+  var monthsSeen={};
+  for(var r2=hdrIdx+1;r2<rows.length;r2++){
+    var row=rows[r2]||[];
+    var psd=String(row[col.psd]||'').trim();
+    if(!psd) continue;
+    var dateStr=col.date!==undefined?String(row[col.date]||'').trim():'';
+    var mo=qaEntryMonth_(dateStr);
+    if(!mo) continue;
+    var dMatch=dateStr.match(/(\d{1,2})/);
+    var day=dMatch?parseInt(dMatch[1],10):0;
+
+    var lateStr=col.lateCheckIn!==undefined?String(row[col.lateCheckIn]||''):'';
+    var earlyStr=col.earlyCheckOut!==undefined?String(row[col.earlyCheckOut]||''):'';
+    var totalBreakMin=col.totalBreak!==undefined?attMinutes_(row[col.totalBreak]):0;
+    var shortBreakMin=col.shortBreakTime!==undefined?attMinutes_(row[col.shortBreakTime]):0;
+    var shortBreakCnt=col.shortBreakCount!==undefined?(parseInt(row[col.shortBreakCount],10)||0):0;
+    var specialBreakMin=col.specialBreakTime!==undefined?attMinutes_(row[col.specialBreakTime]):0;
+    var specialBreakCnt=col.specialBreakCount!==undefined?(parseInt(row[col.specialBreakCount],10)||0):0;
+    var workDurationMin=col.workDuration!==undefined?attMinutes_(row[col.workDuration]):0;
+    var breakCount=col.breakCount!==undefined?(parseInt(row[col.breakCount],10)||0):0;
+
+    var isLate=attIsLate_(lateStr);
+    var lateMin=isLate?attParseMin_(lateStr):0;
+    var isEarly=attIsEarly_(earlyStr);
+    var earlyMin=isEarly?attParseMin_(earlyStr):0;
+    var isExtraBreakDay=totalBreakMin>ATT_EXTRA_BREAK_THRESHOLD_MIN;
+    var extraBreakMin=isExtraBreakDay?(totalBreakMin-ATT_EXTRA_BREAK_THRESHOLD_MIN):0;
+
+    var checkInVal=col.checkIn!==undefined?String(row[col.checkIn]||'').trim():'';
+    var checkOutVal=col.checkOut!==undefined?String(row[col.checkOut]||'').trim():'';
+    // Likely a missed/broken check-out, not a real 0-hour or 16+-hour shift —
+    // keep the raw Work Duration visible in the table, but exclude it from
+    // Avg Work Duration and flag it for manual review in the sheet.
+    var isAnomalousWork=((checkInVal||checkOutVal)&&workDurationMin<=0)||workDurationMin>ATT_MAX_REASONABLE_WORK_MIN;
+
+    var name=col.name!==undefined?String(row[col.name]||'').trim():'';
+    var entry={
+      date:dateStr, month:mo, day:day,
+      psdId:psd, name:name,
+      project:col.project!==undefined?String(row[col.project]||'').trim():'',
+      shift:col.shift!==undefined?String(row[col.shift]||'').trim():'',
+      checkIn:checkInVal,
+      checkOut:checkOutVal,
+      lateRaw:lateStr, isLate:isLate, lateMin:lateMin,
+      earlyRaw:earlyStr, isEarly:isEarly, earlyMin:earlyMin,
+      workDurationMin:workDurationMin, isAnomalousWork:isAnomalousWork,
+      totalBreakMin:totalBreakMin, breakCount:breakCount,
+      shortBreakMin:shortBreakMin, shortBreakCount:shortBreakCnt,
+      specialBreakMin:specialBreakMin, specialBreakCount:specialBreakCnt,
+      extraBreakMin:extraBreakMin, isExtraBreakDay:isExtraBreakDay,
+      remark:col.remark!==undefined?String(row[col.remark]||'').trim():''
+    };
+    out.rowsRaw.push(entry);
+    if(entry.remark) out.remarks.push({date:dateStr,month:mo,day:day,psdId:psd,name:name,remark:entry.remark});
+    if(isAnomalousWork) out.anomalies.push({date:dateStr,month:mo,day:day,psdId:psd,name:name,checkIn:checkInVal,checkOut:checkOutVal,workDurationMin:workDurationMin});
+
+    var key=mo+'||'+normPsd_(psd);
+    if(!out.byAgentMonth[key]){
+      out.byAgentMonth[key]={
+        month:mo, psdId:psd, name:name, project:entry.project,
+        daysPresent:0, lateCount:0, lateMinTotal:0, earlyCount:0, earlyMinTotal:0,
+        extraBreakDays:0, extraBreakMinTotal:0,
+        shortBreakCountTotal:0, shortBreakMinTotal:0,
+        specialBreakCountTotal:0, specialBreakMinTotal:0,
+        workDurationMinTotal:0, totalBreakMinTotal:0, breakCountTotal:0,
+        days:[]
+      };
+    }
+    var agg=out.byAgentMonth[key];
+    agg.daysPresent++;
+    if(name&&name.length>agg.name.length) agg.name=name; // prefer the more complete spelling if it varies
+    if(isLate){ agg.lateCount++; agg.lateMinTotal+=lateMin; }
+    if(isEarly){ agg.earlyCount++; agg.earlyMinTotal+=earlyMin; }
+    if(isExtraBreakDay){ agg.extraBreakDays++; agg.extraBreakMinTotal+=extraBreakMin; }
+    agg.shortBreakCountTotal+=shortBreakCnt;
+    agg.shortBreakMinTotal+=shortBreakMin;
+    agg.specialBreakCountTotal+=specialBreakCnt;
+    agg.specialBreakMinTotal+=specialBreakMin;
+    agg.workDurationMinTotal+=workDurationMin;
+    agg.totalBreakMinTotal+=totalBreakMin;
+    agg.breakCountTotal+=breakCount;
+    agg.days.push(entry);
+    monthsSeen[mo]=true;
+  }
+
+  // Derived per-agent-month rates, now that daysPresent/lateCount/etc are final.
+  Object.values(out.byAgentMonth).forEach(function(agg){
+    var daysInMonth=ATT_MO_DAYS_2026[ATT_MO_IDX[agg.month]]||30;
+    agg.daysInMonth=daysInMonth;
+    agg.daysOff=Math.max(0,daysInMonth-agg.daysPresent);
+    agg.attendanceRate=daysInMonth>0?(agg.daysPresent/daysInMonth):0;
+    agg.punctualityRate=agg.daysPresent>0?((agg.daysPresent-agg.lateCount)/agg.daysPresent):0;
+    agg.avgWorkDurationMin=agg.daysPresent>0?(agg.workDurationMinTotal/agg.daysPresent):0;
+  });
+
+  out.monthList=ATT_MO_ORDER.filter(function(m){return monthsSeen[m];});
+  out.remarks.sort(function(a,b){
+    var ka=(ATT_MO_IDX[a.month]||0)*100+(a.day||0), kb=(ATT_MO_IDX[b.month]||0)*100+(b.day||0);
+    return kb-ka;
+  });
+  return out;
+}
+
+// Merges every per-agent-month aggregate matching a month filter ("all"/"H1"/"H2"/
+// a specific "Jan".."Dec") into ONE row per agent — same filter vocabulary as the
+// rest of the dashboard's month dropdowns. Rates are recomputed from the summed
+// raw counts (not averaged), so a multi-month view stays mathematically correct.
+function attAggregateForFilter_(attData,monthFilter){
+  var months=expandMonths(monthFilter); // null = no filter (all months)
+  var byPsd={};
+  Object.values(attData.byAgentMonth||{}).forEach(function(agg){
+    if(months&&months.indexOf(agg.month)<0) return;
+    var key=normPsd_(agg.psdId);
+    if(!byPsd[key]){
+      byPsd[key]={
+        psdId:agg.psdId,name:agg.name,project:agg.project,
+        daysPresent:0,daysInMonth:0,daysOff:0,
+        lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,
+        extraBreakDays:0,extraBreakMinTotal:0,
+        shortBreakCountTotal:0,shortBreakMinTotal:0,
+        specialBreakCountTotal:0,specialBreakMinTotal:0,
+        workDurationMinTotal:0,totalBreakMinTotal:0,breakCountTotal:0
+      };
+    }
+    var a=byPsd[key];
+    if(agg.name&&agg.name.length>a.name.length) a.name=agg.name;
+    a.daysPresent+=agg.daysPresent;
+    a.daysInMonth+=agg.daysInMonth;
+    a.daysOff+=agg.daysOff;
+    a.lateCount+=agg.lateCount; a.lateMinTotal+=agg.lateMinTotal;
+    a.earlyCount+=agg.earlyCount; a.earlyMinTotal+=agg.earlyMinTotal;
+    a.extraBreakDays+=agg.extraBreakDays; a.extraBreakMinTotal+=agg.extraBreakMinTotal;
+    a.shortBreakCountTotal+=agg.shortBreakCountTotal; a.shortBreakMinTotal+=agg.shortBreakMinTotal;
+    a.specialBreakCountTotal+=agg.specialBreakCountTotal; a.specialBreakMinTotal+=agg.specialBreakMinTotal;
+    a.workDurationMinTotal+=agg.workDurationMinTotal; a.totalBreakMinTotal+=agg.totalBreakMinTotal;
+    a.breakCountTotal+=agg.breakCountTotal;
+  });
+  var list=Object.values(byPsd).map(function(a){
+    a.attendanceRate=a.daysInMonth>0?(a.daysPresent/a.daysInMonth):0;
+    a.punctualityRate=a.daysPresent>0?((a.daysPresent-a.lateCount)/a.daysPresent):0;
+    a.avgWorkDurationMin=a.daysPresent>0?(a.workDurationMinTotal/a.daysPresent):0;
+    return a;
+  });
+  list.sort(function(x,y){return y.daysPresent-x.daysPresent;});
+  return list;
+}
+
+// Filters the flat attendance-exceptions/remarks list (Column Q — e.g. "forgot
+// to check in", "check-in software issue") by the same month vocabulary as
+// everything else on this page, and optionally down to one agent (by
+// normalized PSD-ID). Used by both the Attendance page's own remarks panel
+// and the Agent Audit Profile's per-agent remarks list.
+function attFilterRemarks_(attData,monthFilter,agentKey){
+  var months=expandMonths(monthFilter);
+  var list=(attData.remarks||[]).filter(function(r){
+    if(months&&months.indexOf(r.month)<0) return false;
+    if(agentKey&&agentKey!=='all'&&normPsd_(r.psdId)!==agentKey) return false;
+    return true;
+  });
+  return list;
+}
+
 function parseQALog(rows){
   if(!rows||!rows.length)return[];
   var hdrIdx=-1,hdr=null;
@@ -2802,6 +3232,7 @@ function renderAll(){
   if(raw.daily&&raw.daily.length){var dp=parseDailyForPeaks(raw.daily);renderPeaks(dp);renderDailyReport(raw.daily);}
   if(document.getElementById('page-audit')&&document.getElementById('page-audit').classList.contains('active')) renderAudit();
   if(raw.qa&&raw.qa.length){renderQA();}
+  renderAttendance();
   renderOverview();
 }
 
@@ -2990,7 +3421,11 @@ function renderOverview(){
     bshareEl.innerHTML=brandRanked.map(function(b){
       var v=vd.bt2[b]||0;
       var pct=vd.totH1>0?(v/vd.totH1*100):0;
-      var lbl=BRAND_LABELS[b]||b;
+      // Overview-only label override: show "Jwy" instead of the shared
+      // "Welcome/Jwy" label used everywhere else (dropdowns, Daily Report,
+      // etc.) — deliberately local to this block, not a change to
+      // BRAND_LABELS/brandLabels, so nothing else in the dashboard is affected.
+      var lbl=(b==='Welcome')?'Jwy':(BRAND_LABELS[b]||b);
       var visualPct=Math.max(pct,1.2); // keep tiny shares (e.g. 0.6%) visibly rendered
       var col=BRAND_COLORS[b]||'var(--teal)';
       return '<div class="ov-bshare-row"><span class="ov-bshare-lbl">'+lbl+'</span>'+
@@ -4054,6 +4489,219 @@ function setQM(el,m){
 }
 function renderQAM(d){renderQA(d);}
 
+// ==========================================================================
+// ATTENDANCE PAGE — Internal CS only
+// ==========================================================================
+var attMonthFilter='all';
+var attAgentFilter='all';
+var attSortKey='daysPresent';
+var attSortDir='desc';
+
+function attFmtMin_(m){ return m>=60?((m/60).toFixed(1)+'h'):(Math.round(m)+'m'); }
+// "H.MM" style duration (e.g. 90 minutes -> "1.30h", 42 minutes -> "0.42h") —
+// used only in the Daily Records table for Work Duration / Total Break, per
+// request, so it always shows the full hour+minute breakdown instead of
+// switching to a bare "Xm" shorthand under an hour or rounding to 1 decimal.
+function attFmtHM_(totalMin){
+  if(totalMin===undefined||totalMin===null||isNaN(totalMin)||totalMin<0) return '—';
+  var h=Math.floor(totalMin/60);
+  var m=Math.round(totalMin-h*60);
+  if(m>=60){ h+=1; m-=60; }
+  return h+'.'+(m<10?'0'+m:m)+'h';
+}
+function attFmtPct_(f){ return (f*100).toFixed(0)+'%'; }
+
+function populateAttAgentDropdown_(){
+  var sel=document.getElementById('att-agent');
+  if(!sel||!attParsed) return;
+  var current=sel.value||'all';
+  var seen={}; var opts=[];
+  Object.values(attParsed.byAgentMonth||{}).forEach(function(a){
+    var key=normPsd_(a.psdId);
+    if(seen[key]) return; seen[key]=true;
+    opts.push({key:key,label:a.name+' ('+a.psdId+')'});
+  });
+  opts.sort(function(x,y){return x.label.localeCompare(y.label);});
+  sel.innerHTML='<option value="all">All Agents</option>'+opts.map(function(o){
+    return '<option value="'+o.key+'">'+o.label.replace(/</g,'&lt;')+'</option>';
+  }).join('');
+  if(opts.some(function(o){return o.key===current;})) sel.value=current;
+}
+
+function applyAttendanceFilters(){
+  attMonthFilter=document.getElementById('att-month').value;
+  attAgentFilter=document.getElementById('att-agent').value;
+  renderAttendance();
+}
+
+function sortAttTable(key){
+  if(attSortKey===key){ attSortDir=attSortDir==='asc'?'desc':'asc'; }
+  else { attSortKey=key; attSortDir='desc'; }
+  renderAttendanceTable();
+}
+
+var attCurrentList=[];
+var attCurrentRemarks=[];
+
+function renderAttendance(){
+  var emptyEl=document.getElementById('att-empty');
+  var bodyEl=document.getElementById('att-body');
+  if(!attParsed||!attParsed.monthList||!attParsed.monthList.length){
+    if(emptyEl) emptyEl.style.display='block';
+    if(bodyEl) bodyEl.style.display='none';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display='none';
+  if(bodyEl) bodyEl.style.display='block';
+
+  populateAttAgentDropdown_();
+
+  var infoEl=document.getElementById('att-filter-info');
+  if(infoEl) infoEl.textContent=attMonthFilter==='all'?'All Months':(attMonthFilter==='H1'?'H1 Jan\u2013Jun':(attMonthFilter==='H2'?'H2 Jul\u2013Dec':attMonthFilter));
+
+  var list=attAggregateForFilter_(attParsed,attMonthFilter);
+  if(attAgentFilter!=='all') list=list.filter(function(a){return normPsd_(a.psdId)===attAgentFilter;});
+  attCurrentList=list;
+  attCurrentRemarks=attFilterRemarks_(attParsed,attMonthFilter,attAgentFilter);
+
+  // Team-wide KPI cards
+  var totalPresent=0,totalInMonth=0,totalLateCnt=0,totalLateMin=0,totalEarlyCnt=0,totalEarlyMin=0;
+  var totalExtraDays=0,totalExtraMin=0,totalWorkMin=0,totalOff=0;
+  list.forEach(function(a){
+    totalPresent+=a.daysPresent; totalInMonth+=a.daysInMonth; totalOff+=a.daysOff;
+    totalLateCnt+=a.lateCount; totalLateMin+=a.lateMinTotal;
+    totalEarlyCnt+=a.earlyCount; totalEarlyMin+=a.earlyMinTotal;
+    totalExtraDays+=a.extraBreakDays; totalExtraMin+=a.extraBreakMinTotal;
+    totalWorkMin+=a.workDurationMinTotal;
+  });
+  var attRate=totalInMonth>0?(totalPresent/totalInMonth):0;
+  var puncRate=totalPresent>0?((totalPresent-totalLateCnt)/totalPresent):0;
+  var avgWork=totalPresent>0?(totalWorkMin/totalPresent):0;
+
+  setText_('att-attrate',attFmtPct_(attRate));
+  setText_('att-punc',attFmtPct_(puncRate));
+  setText_('att-avgwork',attFmtHM_(avgWork));
+  setText_('att-off',totalOff);
+  setText_('att-late',totalLateCnt);
+  setText_('att-late-d',attFmtHM_(totalLateMin)+' total');
+  setText_('att-early',totalEarlyCnt);
+  setText_('att-early-d',attFmtHM_(totalEarlyMin)+' total');
+  setText_('att-extra',totalExtraDays);
+  setText_('att-extra-d',attFmtHM_(totalExtraMin)+' total over allowance');
+
+  renderAttendanceTable();
+  renderAttendanceDailyPanel();
+}
+
+function setText_(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
+
+// Small helper so the agent table's "Remarks" column can show how many
+// exception remarks each agent has within the current filter, without
+// re-scanning the full remarks list once per row.
+function attRemarkCountFor_(psdId){
+  var key=normPsd_(psdId);
+  var n=0;
+  attCurrentRemarks.forEach(function(r){ if(normPsd_(r.psdId)===key) n++; });
+  return n;
+}
+
+function renderAttendanceTable(){
+  var tbody=document.getElementById('att-body-tbl');
+  if(!tbody) return;
+  var q=(document.getElementById('att-search')?document.getElementById('att-search').value:'').trim().toLowerCase();
+  var list=attCurrentList.slice();
+  if(q) list=list.filter(function(a){return a.name.toLowerCase().indexOf(q)>=0||a.psdId.toLowerCase().indexOf(q)>=0;});
+  list.forEach(function(a){ a.remarkCount=attRemarkCountFor_(a.psdId); });
+  list.sort(function(a,b){
+    var va=a[attSortKey],vb=b[attSortKey];
+    if(typeof va==='string'){va=va.toLowerCase();vb=String(vb).toLowerCase();}
+    if(va<vb) return attSortDir==='asc'?-1:1;
+    if(va>vb) return attSortDir==='asc'?1:-1;
+    return 0;
+  });
+  tbody.innerHTML=list.map(function(a){
+    return '<tr>'+
+      '<td>'+a.psdId+'</td><td>'+a.name+'</td>'+
+      '<td>'+a.daysPresent+'</td><td>'+a.daysOff+'</td><td>'+attFmtPct_(a.attendanceRate)+'</td>'+
+      '<td>'+a.lateCount+'</td><td>'+attFmtHM_(a.lateMinTotal)+'</td>'+
+      '<td>'+a.earlyCount+'</td><td>'+attFmtHM_(a.earlyMinTotal)+'</td>'+
+      '<td'+(a.extraBreakDays>0?' style="color:var(--red);font-weight:700"':'')+'>'+a.extraBreakDays+'</td>'+
+      '<td'+(a.extraBreakMinTotal>0?' style="color:var(--red)"':'')+'>'+attFmtHM_(a.extraBreakMinTotal)+'</td>'+
+      '<td>'+a.shortBreakCountTotal+'</td><td>'+attFmtHM_(a.avgWorkDurationMin)+'</td>'+
+      '<td'+(a.remarkCount>0?' style="color:var(--amber);font-weight:700;cursor:pointer" onclick="document.getElementById(\'att-agent\').value=\''+normPsd_(a.psdId)+'\';applyAttendanceFilters();document.getElementById(\'att-daily-tbl\').scrollIntoView({behavior:\'smooth\',block:\'center\'})"':'')+'>'+(a.remarkCount>0?('📝 '+a.remarkCount):'—')+'</td>'+
+    '</tr>';
+  }).join('') || '<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">No matching agents</td></tr>';
+}
+
+// Daily Records panel -- raw per-day Check In/Out (+ Late/Early/Work/Break/Remark)
+// straight from the sheet, for ONE agent at a time (only makes sense once a
+// specific agent is picked in the Agent dropdown -- showing every day for
+// every agent at once would be unreadable). The Remark column here already
+// surfaces anything typed in Column Q for that day, so there's no separate
+// "exceptions" list to maintain elsewhere.
+function renderAttendanceDailyPanel(){
+  var tbody=document.getElementById('att-daily-body');
+  var countEl=document.getElementById('att-daily-count');
+  if(!tbody) return;
+
+  if(attAgentFilter==='all'){
+    if(countEl) countEl.textContent='—';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Pick an agent above to see their day-by-day check-in/out records</td></tr>';
+    return;
+  }
+
+  var months=expandMonths(attMonthFilter);
+  var days=(attParsed.rowsRaw||[]).filter(function(r){
+    if(normPsd_(r.psdId)!==attAgentFilter) return false;
+    if(months&&months.indexOf(r.month)<0) return false;
+    return true;
+  });
+  // Chronological order (by month index then day-of-month)
+  days.sort(function(a,b){
+    var ka=(ATT_MO_IDX[a.month]||0)*100+(a.day||0), kb=(ATT_MO_IDX[b.month]||0)*100+(b.day||0);
+    return ka-kb;
+  });
+
+  if(countEl) countEl.textContent=days.length+(days.length===1?' day':' days');
+  tbody.innerHTML=days.map(function(d){
+    return '<tr>'+
+      '<td style="white-space:nowrap">'+d.date+'</td>'+
+      '<td style="white-space:nowrap">'+(d.shift||'—')+'</td>'+
+      '<td style="white-space:nowrap">'+(d.checkIn||'—')+'</td>'+
+      '<td style="white-space:nowrap'+(d.isLate?';color:var(--amber);font-weight:700':'')+'">'+(d.lateRaw||'—')+'</td>'+
+      '<td style="white-space:nowrap">'+(d.checkOut||'—')+'</td>'+
+      '<td style="white-space:nowrap'+(d.isEarly?';color:var(--red);font-weight:700':'')+'">'+(d.earlyRaw||'—')+'</td>'+
+      '<td style="white-space:nowrap">'+(d.workDurationMin?attFmtHM_(d.workDurationMin):'—')+'</td>'+
+      '<td style="white-space:nowrap'+(d.isExtraBreakDay?';color:var(--red);font-weight:700':'')+'">'+(d.totalBreakMin?attFmtHM_(d.totalBreakMin):'—')+'</td>'+
+      '<td style="white-space:normal;color:var(--amber)">'+(d.remark||'')+'</td>'+
+    '</tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">No daily records for this filter</td></tr>';
+}
+// Header click-to-sort (attached once at boot, see bottom of script)
+document.addEventListener('DOMContentLoaded',function(){
+  var tbl=document.getElementById('att-tbl');
+  if(tbl) tbl.querySelectorAll('th[data-key]').forEach(function(th){
+    th.style.cursor='pointer';
+    th.addEventListener('click',function(){ sortAttTable(th.dataset.key); });
+  });
+});
+
+// Pulls this agent's attendance summary for the Agent Audit Profile modal.
+// Returns null if there's no attendance data at all for this region/agent
+// (e.g. Outsource agents, or PKR/PHP before their sheet is wired up) so the
+// caller can just skip rendering the section instead of showing empty stats.
+function attGetAgentSummary_(identity,monthFilter){
+  if(!attParsed||!attParsed.monthList||!attParsed.monthList.length) return null;
+  var list=attAggregateForFilter_(attParsed,monthFilter||'all');
+  var key=normPsd_(identity.psdId||'');
+  var match=list.find(function(a){return normPsd_(a.psdId)===key;});
+  if(!match&&identity.name){
+    var nameUp=identity.name.trim().toUpperCase();
+    match=list.find(function(a){return a.name.trim().toUpperCase()===nameUp;});
+  }
+  return match||null;
+}
+
 function toggleSidebar(){
   document.querySelector('.app').classList.toggle('sb-open');
 }
@@ -4068,7 +4716,7 @@ function showPage(id,nav){
   if(pgSubEl) pgSubEl.textContent=lang==='zh'?(PAGE_SUB_ZH[id]||''):(PAGE_SUB[id]||'');
   // Hide global filter bar on SLA page (SLA has its own filters)
   var fb=document.getElementById('global-filter-bar');
-  if(fb) fb.style.display=(id==='sla'||id==='auto'||id==='qa'||id==='daily'||id==='overview'||id==='audit'||id==='audit-profile')?'none':'flex';
+  if(fb) fb.style.display=(id==='sla'||id==='auto'||id==='qa'||id==='daily'||id==='overview'||id==='audit'||id==='audit-profile'||id==='attendance')?'none':'flex';
   // Hide brand filter on QA page (QA data is not split by brand)
   var hideB=(id==='qa');
   var bfg=document.getElementById('brand-filter-group');
@@ -4911,10 +5559,21 @@ function parseAgentProfileSheet(rows){
     var t=String(c||'').trim();
     if(t) sectionStarts.push({col:i,label:t});
   });
-  function teamForCol_(col){
+  function teamForCol_(col,blockIndex){
     var best=null;
     sectionStarts.forEach(function(s){ if(s.col<=col&&(!best||s.col>best.col)) best=s; });
-    return (best&&/outsource/i.test(best.label))?'Outsource':'Internal';
+    if(best){
+      if(/outsource/i.test(best.label)) return 'Outsource';
+      if(/internal/i.test(best.label)) return 'Internal';
+    }
+    // No usable "Internal"/"Outsource" banner directly above this block (some
+    // sheets only label the first block, e.g. "Internal CS", and leave the
+    // second block with no banner at all). Fall back to position: every CS
+    // Detail sheet in this dashboard is laid out as [Internal block, Outsource
+    // block], so the first PSD-ID block found is always Internal and any block
+    // after it is Outsource — this is what fixes the PKR sheet's un-labeled
+    // Outsource block getting miscounted as Internal.
+    return blockIndex===0?'Internal':'Outsource';
   }
 
   // Find the header row — the one containing a "PSD" / "PSD ID" cell (usually row 1 or 2;
@@ -4947,7 +5606,7 @@ function parseAgentProfileSheet(rows){
       else if((h.indexOf('remark')>=0||h.indexOf('reamark')>=0)&&cols.remark===undefined) cols.remark=c;
       else if(h.indexOf('status')>=0&&cols.status===undefined) cols.status=c;
     }
-    var team=teamForCol_(psdCol);
+    var team=teamForCol_(psdCol,bi);
     var current=null;
     var flush=function(){
       if(!current) return;
@@ -4986,27 +5645,26 @@ function parseAgentProfileSheet(rows){
   return out;
 }
 
-// Builds the searchable agent directory by merging real SLA agents (all
-// months, both Internal + Outsource) with any AGENT_PROFILE_DATA-only entries,
-// keyed by PSD-ID when available (falls back to name).
+// Builds the searchable Agent Audit Profile roster.
+// IMPORTANT: the roster (who appears in the directory at all, and therefore the
+// headcount shown on this page) is driven ENTIRELY by the "CS Detail" sheet
+// (AGENT_PROFILE_DATA). SLA Metrics data is NEVER used to add names here — it is
+// only used later, inside an already-listed agent's opened profile, to pull in
+// their chat totals / FRT / MRT / QA errors / monthly trend. This keeps the
+// directory's headcount matching exactly what's maintained in CS Detail, instead
+// of drifting upward whenever someone shows up in a past month's SLA sheet but
+// isn't (or is no longer) a row in CS Detail.
 function buildAgentDirectory(){
   var dir={};
-  if(slaParsed&&slaParsed.months){
-    Object.keys(slaParsed.months).forEach(function(mo){
-      Object.values(slaParsed.months[mo].agents||{}).forEach(function(a){
-        var idKey=(a.psdId&&a.psdId.trim())?normPsd_(a.psdId):a.name.trim().toUpperCase();
-        if(!dir[idKey]) dir[idKey]={key:idKey,name:a.name,psdId:a.psdId||'',team:a.team||'CX'};
-      });
-    });
-  }
   Object.keys(AGENT_PROFILE_DATA).forEach(function(rawKey){
     var p=AGENT_PROFILE_DATA[rawKey];
+    if(!p||(!p.name&&!p.psdId)) return;
     var idKey=(p.psdId&&p.psdId.trim())?normPsd_(p.psdId):p.name.trim().toUpperCase();
     if(!dir[idKey]){
-      dir[idKey]={key:idKey,name:p.name,psdId:p.psdId||rawKey,team:p.team==='Outsource'?'Outsource':'CX'};
+      dir[idKey]={key:idKey,name:p.name,psdId:p.psdId||rawKey,team:p.team==='Outsource'?'Outsource':'Internal'};
     } else if(p.name&&p.name.length>dir[idKey].name.length){
-      // Same person, matched by normalized PSD-ID across both sheets — keep
-      // whichever name is more descriptive (e.g. "Name (Nickname)")
+      // Same person appearing twice in CS Detail (shouldn't normally happen) —
+      // keep whichever name is more descriptive (e.g. "Name (Nickname)")
       dir[idKey].name=p.name;
     }
   });
@@ -5298,7 +5956,31 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
     qaSection='<div class="ap-noprofile">'+(isZh?'该坐席暂无 QA 错误记录':'No QA error records for this agent')+'</div>';
   }
 
-  body.innerHTML=header+kpi+chartPanel+qaSection;
+  // Attendance summary — Internal CS only. Follows the same month filter as
+  // the SLA/QA sections above (apMonthFilter) instead of always showing
+  // year-to-date, so switching the month dropdown updates this too. Silently
+  // omitted (no empty panel, no error) for Outsource agents or regions
+  // without an Attendance sheet wired up yet — attGetAgentSummary_ returns
+  // null in both cases.
+  var attSummary=attGetAgentSummary_(identity,apMonthFilter);
+  var attSection='';
+  if(attSummary){
+    var attRemarksList=attFilterRemarks_(attParsed,apMonthFilter,normPsd_(identity.psdId||attSummary.psdId));
+    var attRemarksHtml=attRemarksList.length?
+      '<ul class="ap-cell-list" style="padding:0 16px 14px">'+attRemarksList.map(function(r){return '<li><b>'+r.date+':</b> '+r.remark+'</li>';}).join('')+'</ul>':'';
+    var attPeriodLbl=apMonthFilter==='all'?(isZh?'全年至今':'Year to Date'):(apMonthFilter==='H1'?'H1':(apMonthFilter==='H2'?'H2':apMonthFilter));
+    attSection='<div class="panel" style="margin-bottom:18px"><div class="ph"><div class="ph-t">🕒 '+(isZh?'考勤总览（'+attPeriodLbl+'）':'Attendance ('+attPeriodLbl+')')+'</div></div>'+
+      '<div class="kpi-grid g4" style="padding:14px 16px 16px">'+
+        '<div class="kpi c-teal"><div class="kpi-lbl">'+(isZh?'出勤率':'Attendance Rate')+'</div><div class="kpi-val">'+(attSummary.attendanceRate*100).toFixed(0)+'%</div><div class="kpi-d">'+attSummary.daysPresent+'/'+attSummary.daysInMonth+' '+(isZh?'天':'days')+'</div></div>'+
+        '<div class="kpi c-green"><div class="kpi-lbl">'+(isZh?'准点率':'Punctuality Rate')+'</div><div class="kpi-val">'+(attSummary.punctualityRate*100).toFixed(0)+'%</div><div class="kpi-d">'+attSummary.lateCount+' '+(isZh?'次迟到':'late')+' · '+attFmtHM_(attSummary.lateMinTotal)+'</div></div>'+
+        '<div class="kpi c-amber"><div class="kpi-lbl">'+(isZh?'早退':'Early Check-Out')+'</div><div class="kpi-val">'+attSummary.earlyCount+'</div><div class="kpi-d">'+attFmtHM_(attSummary.earlyMinTotal)+' '+(isZh?'总计':'total')+'</div></div>'+
+        '<div class="kpi c-red"><div class="kpi-lbl">'+(isZh?'超额休息 (&gt;90min)':'Extra Break (&gt;90min)')+'</div><div class="kpi-val">'+attSummary.extraBreakDays+'</div><div class="kpi-d">'+attFmtHM_(attSummary.extraBreakMinTotal)+' '+(isZh?'超出':'over')+'</div></div>'+
+      '</div>'+
+      (attRemarksHtml?('<div style="padding:0 16px"><div class="ap-cell-lbl">⚠️ '+(isZh?'考勤备注':'Attendance Remarks')+'</div></div>'+attRemarksHtml):'')+
+    '</div>';
+  }
+
+  body.innerHTML=header+kpi+chartPanel+attSection+qaSection;
   overlay.classList.add('open');
 
   // Render the trend chart after the canvas exists in the DOM
