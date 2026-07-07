@@ -152,6 +152,24 @@ canvas{max-height:200px}
 .zoom-body table.dt{font-size:13px}
 .zoom-foot{padding:10px 22px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);font-family:var(--mono);flex-shrink:0}
 
+/* DETAIL POPUP — shared small modal used by both the Attendance ⚠️ Anomaly
+   column and the 📝 Remarks column (click a cell to see that agent's list) */
+.detail-box{background:var(--card);border:1px solid var(--border2);border-radius:14px;width:min(420px,90vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.5);animation:zoomPopIn .18s cubic-bezier(.2,.9,.3,1.2)}
+.detail-box.tone-red{border-color:var(--red)}
+.detail-box.tone-amber{border-color:var(--amber)}
+.detail-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.detail-title{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:8px}
+.detail-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px}
+.detail-body{flex:1;overflow:auto;padding:6px 0}
+.detail-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 20px;border-bottom:1px solid var(--border)}
+.detail-row:last-child{border-bottom:none}
+.detail-date{font-size:12px;color:var(--text);font-weight:600;flex-shrink:0}
+.detail-note{font-size:11.5px;color:var(--muted);text-align:right}
+.detail-badge{font-size:10px;font-weight:800;font-family:var(--mono);padding:3px 9px;border-radius:20px;flex-shrink:0}
+.detail-badge.red{color:var(--red);background:var(--red-d)}
+.detail-badge.amber{color:var(--amber);background:var(--amber-d)}
+.detail-foot{padding:12px 20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);flex-shrink:0}
+
 /* TABLE */
 .dt{width:100%;border-collapse:collapse}
 .dt th{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:8px 14px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;white-space:nowrap}
@@ -471,6 +489,8 @@ body.light select option{background:#ffffff;color:#0c1e35}
         <option value="Oct">October</option>
         <option value="Nov">November</option>
         <option value="Dec">December</option>
+        <option value="H1">H1 (Jan – Jun)</option>
+        <option value="H2">H2 (Jul – Dec)</option>
       </select>
       <button class="ref-btn" id="export-btn" onclick="exportMonthReport()"><i class="fa-solid fa-download"></i> <span id="export-label">Export Month Report</span></button>
       <button class="ref-btn" id="refresh-btn" onclick="refreshClick()"><i class="fa-solid fa-rotate-right" id="refresh-icon"></i> <span id="refresh-label">Refresh</span></button>
@@ -936,10 +956,11 @@ body.light select option{background:#ffffff;color:#0c1e35}
           <div class="kpi c-purple"><div class="kpi-lbl">Avg Work Duration</div><div class="kpi-val" id="att-avgwork">-</div><div class="kpi-d">Per day present</div></div>
           <div class="kpi c-amber"><div class="kpi-lbl">Days Off (Total)</div><div class="kpi-val" id="att-off">-</div><div class="kpi-d">6/month entitled -- not "absent"</div></div>
         </div>
-        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
           <div class="kpi c-amber"><div class="kpi-lbl">Late Check-In</div><div class="kpi-val" id="att-late">-</div><div class="kpi-d" id="att-late-d">- min total</div></div>
           <div class="kpi c-red"><div class="kpi-lbl">Early Check-Out</div><div class="kpi-val" id="att-early">-</div><div class="kpi-d" id="att-early-d">- min total</div></div>
           <div class="kpi c-red"><div class="kpi-lbl">Extra Break (over 90min/day)</div><div class="kpi-val" id="att-extra">-</div><div class="kpi-d" id="att-extra-d">- min total over allowance</div></div>
+          <div class="kpi c-red"><div class="kpi-lbl">⚠️ Anomaly (Dup. Check-In)</div><div class="kpi-val" id="att-anomaly">-</div><div class="kpi-d" id="att-anomaly-d">agent-days with 2+ punches same day</div></div>
         </div>
 
         <div class="panel" style="margin-top:14px">
@@ -956,6 +977,7 @@ body.light select option{background:#ffffff;color:#0c1e35}
                 <th data-key="earlyCount">Early Out (count)</th><th data-key="earlyMinTotal">Early Out (min)</th>
                 <th data-key="extraBreakDays">Extra Break (days)</th><th data-key="extraBreakMinTotal">Extra Break (min)</th>
                 <th data-key="shortBreakCountTotal">Short Break (count)</th><th data-key="avgWorkDurationMin">Avg Work</th>
+                <th data-key="anomalyDays">⚠️ Anomaly</th>
                 <th data-key="remarkCount">Remarks</th>
               </tr></thead>
               <tbody id="att-body-tbl"></tbody>
@@ -1036,6 +1058,21 @@ body.light select option{background:#ffffff;color:#0c1e35}
     </div>
     <div class="zoom-body" id="zoom-body"></div>
     <div class="zoom-foot" id="zoom-foot" data-i18n="zoomEscHint">Press ESC or click outside to close</div>
+  </div>
+</div>
+
+<!-- DETAIL POPUP — shared by Attendance's ⚠️ Anomaly and 📝 Remarks columns -->
+<div class="zoom-overlay" id="detail-overlay" onclick="if(event.target===this)closeDetailModal()">
+  <div class="detail-box" id="detail-box">
+    <div class="detail-head">
+      <div>
+        <div class="detail-title"><span id="detail-icon">—</span> <span id="detail-title-text">—</span></div>
+        <div class="detail-sub" id="detail-sub-text"></div>
+      </div>
+      <button class="zoom-close" onclick="closeDetailModal()">✕</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+    <div class="detail-foot" id="detail-foot-text"></div>
   </div>
 </div>
 
@@ -1689,14 +1726,14 @@ function loadAll(){
 // later with no connection back to this dashboard or the Google Sheet) ──────
 function exportMonthReport(){
   var sel=document.getElementById('export-month-sel');
-  var month=sel?sel.value:null;
-  if(!month){ alert(lang==='zh'?'请选择一个月份':'Please choose a month.'); return; }
+  var period=sel?sel.value:null;
+  if(!period){ alert(lang==='zh'?'请选择一个月份或半年度':'Please choose a month or half-year.'); return; }
   var btn=document.getElementById('export-btn'), lbl=document.getElementById('export-label');
   if(btn){ btn.disabled=true; if(lbl) lbl.textContent=(lang==='zh'?'生成中…':'Generating…'); }
   setTimeout(function(){ // let the button repaint before the (synchronous) build work runs
     try{
-      var html=buildMonthReportHtml_(month);
-      downloadHtmlFile_(html,currentRegion+'_'+month+'_Report.html');
+      var html=buildMonthReportHtml_(period);
+      downloadHtmlFile_(html,currentRegion+'_'+period+'_Report.html');
     }catch(e){
       console.error(e);
       alert((lang==='zh'?'生成失败：':'Failed to generate report: ')+e.message);
@@ -1720,37 +1757,50 @@ function downloadHtmlFile_(htmlStr,filename){
 // constants so they can be dropped into the generated file byte-for-byte,
 // regardless of quotes/backticks they contain ──────────────────────────────
 var REPORT_STYLE_CSS = "\n:root{\n  --bg: #0a0e14;\n  --bg-raised: #10151d;\n  --panel: #131a24;\n  --panel-2: #0d1219;\n  --border: #212b38;\n  --border-soft: #1a222d;\n  --text: #e8edf4;\n  --text-dim: #93a1b3;\n  --text-faint: #5c6b80;\n  --teal: #2bd4ac;\n  --teal-dim: rgba(43,212,172,0.13);\n  --amber: #f5a83c;\n  --amber-dim: rgba(245,168,60,0.14);\n  --red: #f2596f;\n  --red-dim: rgba(242,89,111,0.14);\n  --blue: #6f93ff;\n  --blue-dim: rgba(111,147,255,0.13);\n  --violet: #b18bf5;\n  --radius: 10px;\n  --sidebar-w: 400px;\n  --font-display: 'IBM Plex Sans', system-ui, sans-serif;\n  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;\n  --mode-icon: '\u2600\ufe0f';\n}\n[data-theme=\"light\"] {\n  --bg: #f4f7fc;\n  --bg-raised: #eaf0f6;\n  --panel: #ffffff;\n  --panel-2: #f8faff;\n  --border: #d0d9e6;\n  --border-soft: #e2e9f2;\n  --text: #1b2a41;\n  --text-dim: #3f5570;\n  --text-faint: #6a7e99;\n  --teal: #0f9d7a;\n  --teal-dim: rgba(15,157,122,0.13);\n  --amber: #b86b1f;\n  --amber-dim: rgba(184,107,31,0.14);\n  --red: #c94a5e;\n  --red-dim: rgba(201,74,94,0.14);\n  --blue: #4a7aff;\n  --blue-dim: rgba(74,122,255,0.13);\n  --mode-icon: '\ud83c\udf19';\n}\n*{box-sizing:border-box;}\nhtml,body{margin:0;padding:0;}\nbody{\n  background: var(--bg);\n  color: var(--text);\n  font-family: var(--font-display);\n  font-size: 14px;\n  line-height: 1.5;\n  -webkit-font-smoothing: antialiased;\n  transition: background 0.2s, color 0.2s;\n}\n::selection{ background: var(--teal); color:#04140f; }\n::-webkit-scrollbar{ width:10px; height:10px; }\n::-webkit-scrollbar-track{ background:transparent; }\n::-webkit-scrollbar-thumb{ background:#26313f; border-radius:8px; }\n::-webkit-scrollbar-thumb:hover{ background:#324055; }\n[data-theme=\"light\"] ::-webkit-scrollbar-thumb{ background:#b0c4db; }\n[data-theme=\"light\"] ::-webkit-scrollbar-thumb:hover{ background:#9aafc9; }\n\na { color: inherit; }\n\n/* ===== Top bar ===== */\n.topbar{\n  position: sticky; top:0; z-index:50;\n  display:flex; align-items:center; gap:16px;\n  padding: 12px 24px;\n  background: linear-gradient(180deg, #0d1320 0%, #0a0e14 100%);\n  border-bottom: 1px solid var(--border);\n  transition: background 0.2s, border-color 0.2s;\n}\n[data-theme=\"light\"] .topbar{\n  background: linear-gradient(180deg, #eaf0f6 0%, #f4f7fc 100%);\n}\n.topbar .brand{\n  display:flex; align-items:center; gap:10px;\n  font-weight:700; font-size:15px; letter-spacing:0.2px;\n  white-space:nowrap;\n}\n.brand .dot{\n  width:9px;height:9px;border-radius:50%;\n  background: var(--teal);\n  box-shadow: 0 0 0 3px var(--teal-dim);\n  flex-shrink:0;\n}\n.brand .sub{ color:var(--text-faint); font-weight:500; font-size:12px; }\n.topbar .spacer{ flex:1; }\n.global-search{\n  position:relative; width: 320px; max-width: 40vw;\n}\n.global-search input{\n  width:100%;\n  background: var(--panel-2);\n  border:1px solid var(--border);\n  color: var(--text);\n  padding: 8px 12px 8px 32px;\n  border-radius: 8px;\n  font-family: var(--font-mono);\n  font-size:12.5px;\n  outline:none;\n  transition: border-color .15s;\n}\n.global-search input:focus{ border-color: var(--blue); }\n.global-search svg{\n  position:absolute; left:10px; top:50%; transform:translateY(-50%);\n  width:14px;height:14px; color:var(--text-faint); pointer-events:none;\n}\n.global-results{\n  position:absolute; top:calc(100% + 6px); left:0; right:0;\n  background: var(--bg-raised); border:1px solid var(--border); border-radius:8px;\n  max-height: 360px; overflow-y:auto; display:none; z-index:60;\n  box-shadow: 0 12px 32px rgba(0,0,0,0.5);\n}\n.global-results.show{ display:block; }\n.gr-item{\n  padding:9px 12px; border-bottom:1px solid var(--border-soft); cursor:pointer;\n  display:flex; justify-content:space-between; align-items:center; gap:8px;\n}\n.gr-item:hover{ background: var(--panel); }\n.gr-item:last-child{ border-bottom:none; }\n.gr-name{ font-size:12.5px; font-weight:500; }\n.gr-meta{ font-size:11px; color:var(--text-faint); font-family:var(--font-mono); white-space:nowrap; }\n.gr-empty{ padding:14px 12px; color:var(--text-faint); font-size:12.5px; }\n\n/* theme toggle button */\n.theme-toggle {\n  background: var(--panel-2);\n  border: 1px solid var(--border);\n  border-radius: 8px;\n  padding: 6px 10px;\n  font-size: 18px;\n  line-height: 1;\n  cursor: pointer;\n  transition: background 0.2s, border-color 0.2s;\n}\n.theme-toggle:hover {\n  background: var(--panel);\n  border-color: var(--text-faint);\n}\n\n/* ===== Layout ===== */\n.layout{\n  display:flex; align-items:flex-start;\n  max-width: 1600px; margin:0 auto;\n}\n.sidebar{\n  width: var(--sidebar-w); flex-shrink:0;\n  position: sticky; top: 57px;\n  height: calc(100vh - 57px);\n  overflow-y:auto;\n  padding: 20px 16px 60px 24px;\n  border-right: 1px solid var(--border);\n}\n.main{\n  flex:1; min-width:0;\n  padding: 24px 28px 100px 28px;\n}\n\n/* ===== Cards ===== */\n.card{\n  background: var(--panel);\n  border: 1px solid var(--border);\n  border-radius: var(--radius);\n  padding: 16px 16px;\n  margin-bottom: 14px;\n}\n.card-title{\n  font-size: 11px; text-transform:uppercase; letter-spacing:0.09em;\n  color: var(--text-faint); font-weight:600; margin: 0 0 10px 0;\n  display:flex; align-items:center; gap:8px;\n}\n.card-title .line{ flex:1; height:1px; background:var(--border-soft); }\n.eyebrow-badge{\n  font-family: var(--font-mono); font-size:10px; padding:2px 6px; border-radius:4px;\n  background: var(--teal-dim); color:var(--teal); font-weight:600;\n}\n.exec-title{ font-size:19px; font-weight:700; margin:2px 0 4px 0; letter-spacing:-0.01em; }\n.exec-sub{ color:var(--text-dim); font-size:12.5px; margin-bottom: 16px; }\n.exec-para{ color: var(--text-dim); font-size:13px; line-height:1.65; }\n.exec-para strong{ color:var(--text); font-weight:600; }\n\n.obstacle-item, .change-item{\n  display:flex; gap:10px; align-items:flex-start; padding:8px 0;\n  border-bottom: 1px solid var(--border-soft); font-size:12.5px; color:var(--text-dim);\n}\n.obstacle-item:last-child, .change-item:last-child{ border-bottom:none; }\n.tag-resolved{\n  flex-shrink:0; font-family:var(--font-mono); font-size:9.5px; font-weight:600;\n  padding: 2px 6px; border-radius:4px; background: var(--teal-dim); color:var(--teal);\n  text-transform:uppercase; letter-spacing:0.04em; margin-top:1px;\n}\n.change-num{\n  flex-shrink:0; width:18px;height:18px; border-radius:5px; background:var(--panel-2);\n  border:1px solid var(--border); display:flex; align-items:center;justify-content:center;\n  font-family:var(--font-mono); font-size:10px; color:var(--text-faint); font-weight:600;\n}\n\n/* nav insight cards in sidebar */\n.nav-section-title{\n  font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--text-faint);\n  font-weight:600; margin: 22px 0 10px 2px;\n}\n.insight-card{\n  border:1px solid var(--border); border-radius: var(--radius); padding:13px 14px;\n  margin-bottom:10px; cursor:pointer; background: var(--panel);\n  transition: border-color .15s, transform .1s, background .15s;\n}\n.insight-card:hover{ border-color: var(--blue); background: var(--bg-raised); }\n.insight-card:active{ transform: scale(0.99); }\n.insight-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }\n.insight-num{ font-family:var(--font-mono); font-size:10px; color:var(--text-faint); }\n.insight-title{ font-size:13.5px; font-weight:600; }\n.insight-arrow{ color:var(--text-faint); font-size:13px; transition:transform .15s; }\n.insight-card:hover .insight-arrow{ transform: translateX(3px); color:var(--blue); }\n.insight-body{ font-size:12px; color:var(--text-dim); line-height:1.55; }\n.insight-stat-row{ display:flex; gap:8px; margin-top:9px; flex-wrap:wrap; }\n.mini-stat{\n  font-family:var(--font-mono); font-size:11px; padding:4px 8px; border-radius:6px;\n  background: var(--panel-2); border:1px solid var(--border-soft); color:var(--text-dim);\n}\n.mini-stat b{ color:var(--text); font-weight:600; }\n.mini-stat.warn{ background:var(--amber-dim); color:var(--amber); border-color:transparent; }\n.mini-stat.warn b{ color:var(--amber); }\n.mini-stat.crit{ background:var(--red-dim); color:var(--red); border-color:transparent; }\n.mini-stat.crit b{ color:var(--red); }\n.mini-stat.good{ background:var(--teal-dim); color:var(--teal); border-color:transparent; }\n.mini-stat.good b{ color:var(--teal); }\n\n/* ===== Section headers in main ===== */\n.section{ margin-bottom: 46px; scroll-margin-top: 72px; }\n.section-head{\n  display:flex; align-items:baseline; gap:12px; margin-bottom:14px; flex-wrap:wrap;\n}\n.section-eyebrow{\n  font-family:var(--font-mono); font-size:11px; color: var(--blue); font-weight:600;\n}\n.section-title{ font-size:22px; font-weight:700; letter-spacing:-0.01em; }\n.section-desc{ color:var(--text-dim); font-size:13px; margin: -6px 0 18px 0; max-width:760px; }\n\n/* stat cards row */\n.stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }\n.stat-card{\n  background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);\n  padding: 13px 15px;\n}\n.stat-label{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-faint); font-weight:600; margin-bottom:6px; }\n.stat-value{ font-family:var(--font-mono); font-size:21px; font-weight:600; }\n.stat-value.teal{ color:var(--teal); } .stat-value.amber{ color:var(--amber); } .stat-value.red{ color:var(--red); } .stat-value.blue{ color:var(--blue); }\n.stat-foot{ font-size:11px; color:var(--text-faint); margin-top:4px; }\n\n/* team tabs */\n.tabs{ display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }\n.tab-btn{\n  font-family: var(--font-mono); font-size:12px; font-weight:600;\n  padding:7px 13px; border-radius:7px; border:1px solid var(--border);\n  background: var(--panel-2); color: var(--text-dim); cursor:pointer;\n  transition: all .12s;\n}\n.tab-btn:hover{ color:var(--text); border-color:var(--text-faint); }\n.tab-btn.active{ background: var(--teal-dim); color: var(--teal); border-color: transparent; }\n\n/* bar rows (for team success rate / brand totals) */\n.bar-list{ display:flex; flex-direction:column; gap:9px; margin-bottom: 18px;}\n.bar-row{ display:grid; grid-template-columns: 130px 1fr 74px; align-items:center; gap:12px; }\n.bar-row .lbl{ font-size:12.5px; font-weight:500; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }\n.bar-track{ height:9px; background: var(--panel-2); border-radius:5px; overflow:hidden; border:1px solid var(--border-soft); }\n.bar-fill{ height:100%; border-radius:5px; background: linear-gradient(90deg, var(--blue), var(--teal)); }\n.bar-fill.amber{ background: linear-gradient(90deg, #a86a1f, var(--amber)); }\n.bar-fill.red{ background: linear-gradient(90deg, #9c2f42, var(--red)); }\n.bar-val{ font-family:var(--font-mono); font-size:12px; text-align:right; color:var(--text-dim); }\n\n/* callout lists (top offenders etc) */\n.callout-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap:10px; margin-bottom:18px; }\n.callout-box{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:13px 14px; }\n.callout-box h4{ margin:0 0 10px 0; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); }\n.callout-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }\n.callout-list li{\n  display:flex; justify-content:space-between; align-items:center; gap:8px;\n  padding:7px 6px; border-radius:6px; cursor:pointer; font-size:12.5px;\n}\n.callout-list li:hover{ background: var(--bg-raised); }\n.callout-list .cl-name{ font-weight:500; }\n.callout-list .cl-id{ color:var(--text-faint); font-family:var(--font-mono); font-size:10.5px; margin-left:6px;}\n.callout-list .cl-val{ font-family:var(--font-mono); font-weight:600; flex-shrink:0; }\n\n/* table toolbar + table */\n.table-toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;}\n.table-search{\n  flex:1; min-width:180px; max-width:320px;\n  background: var(--panel-2); border:1px solid var(--border); border-radius:7px;\n  padding:7px 11px; color:var(--text); font-family:var(--font-mono); font-size:12px; outline:none;\n}\n.table-search:focus{ border-color: var(--blue); }\n.table-count{ font-size:11.5px; color:var(--text-faint); font-family:var(--font-mono); }\n.table-wrap{\n  border:1px solid var(--border); border-radius: var(--radius); overflow:auto; max-height: 560px;\n  background: var(--panel-2);\n}\ntable.data-table{ width:100%; border-collapse:collapse; font-size:12.5px; }\ntable.data-table thead th{\n  position:sticky; top:0; z-index:2;\n  background: var(--bg-raised); text-align:left; padding:9px 12px;\n  font-size:10.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-faint);\n  border-bottom:1px solid var(--border); cursor:pointer; white-space:nowrap; user-select:none;\n}\ntable.data-table thead th:hover{ color: var(--text); }\ntable.data-table thead th .arrow{ margin-left:4px; opacity:0.5; font-size:9px; }\ntable.data-table tbody td{\n  padding: 7px 12px; border-bottom:1px solid var(--border-soft); white-space:nowrap;\n  font-family: var(--font-mono); color: var(--text-dim);\n}\ntable.data-table tbody td.name-cell{ font-family:var(--font-display); color:var(--text); font-weight:500; }\ntable.data-table tbody tr:hover td{ background: var(--bg-raised); }\ntable.data-table tbody tr.flash td{ background: rgba(111,147,255,0.16); }\n.pill{ display:inline-block; padding:2px 7px; border-radius:5px; font-size:11px; font-weight:600; font-family:var(--font-mono); }\n.pill.good{ background:var(--teal-dim); color:var(--teal); }\n.pill.warn{ background:var(--amber-dim); color:var(--amber); }\n.pill.bad{ background:var(--red-dim); color:var(--red); }\n.pill.neutral{ background:var(--panel); color:var(--text-faint); border:1px solid var(--border); }\n\n.subtle-btn{\n  font-family: var(--font-mono); font-size:11.5px; color:var(--blue); background:none; border:1px solid var(--border);\n  padding:6px 12px; border-radius:7px; cursor:pointer; font-weight:600;\n}\n.subtle-btn:hover{ border-color: var(--blue); }\n\n/* implementation table */\n.impl-table{ width:100%; border-collapse:collapse; margin-bottom:18px; }\n.impl-table th{ text-align:left; font-size:10.5px; text-transform:uppercase; color:var(--text-faint); padding:8px 12px; border-bottom:1px solid var(--border); letter-spacing:0.05em;}\n.impl-table td{ padding:11px 12px; border-bottom:1px solid var(--border-soft); font-size:13px; }\n.status-badge{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--teal-dim); color:var(--teal); }\n.status-badge::before{ content:''; width:6px;height:6px;border-radius:50%; background:currentColor;}\n.status-badge.building{ background: var(--amber-dim); color: var(--amber); }\n\n.tools-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }\n.tool-card{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }\n.tool-card h4{ margin:0 0 8px 0; font-size:14.5px; }\n.footer-note{ text-align:center; color:var(--text-faint); font-size:11.5px; padding: 30px 0 10px; }\n\n/* chart containers (Volume / SLA / Top Performers / Speed sections) */\n.chart-wrap{\n  background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);\n  padding: 14px; height: 280px; margin-bottom: 18px; position: relative;\n}\n.chart-wrap canvas{ width:100% !important; height:100% !important; }\n.chart-wrap.chart-scroll{ overflow-y:auto; }\n.chart-wrap.chart-scroll canvas{ height:auto !important; }\n\n@media (max-width: 980px){\n  .layout{ flex-direction:column; }\n  .sidebar{ width:100%; position:relative; top:0; height:auto; border-right:none; border-bottom:1px solid var(--border); }\n  .global-search{ display:none; }\n}\n";
-var REPORT_ENGINE_JS = "const DATA = JSON.parse(document.getElementById('report-data').textContent);\nconst sectionControllers = {};\nconst charts = {};\n\n/* ---------------- helpers ---------------- */\nfunction esc(s){ return String(s===undefined||s===null?'':s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); }\nfunction normTeam(s){ return String(s||'').replace(/team/i,'').trim().toUpperCase(); }\nfunction num(v){ return (v===null||v===undefined||v==='-'||v==='') ? null : Number(v); }\nfunction fmtInt(v){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : Math.round(n).toLocaleString(); }\nfunction fmtNum(v, d=2){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : n.toFixed(d); }\nfunction dashOr(v){ return (v===null||v===undefined||v==='-'||v==='') ? '\u2014' : v; }\nfunction fmtSec(sec){ if(!sec || sec<=0) return '\u2014'; const m=Math.floor(sec/60), s=Math.round(sec%60); return m>0 ? (m+'m '+s+'s') : (s+'s'); }\nfunction parseTimeStr(s){\n  if(!s || s==='-') return -1;\n  let t=0; const h=s.match(/(\\d+)h/); if(h) t+=parseInt(h[1])*3600;\n  const m=s.match(/(\\d+)m/); if(m) t+=parseInt(m[1])*60;\n  const sec=s.match(/(\\d+)s/); if(sec) t+=parseInt(sec[1]);\n  return t;\n}\nfunction csatPill(v){\n  const n = num(v);\n  if(n===null || isNaN(n)) return `<span class=\"pill neutral\">\u2014</span>`;\n  if(n>1) return `<span class=\"pill bad\">${n.toFixed(2)} \u26a0</span>`;\n  const cls = n>=0.6?'good':n>=0.4?'warn':'bad';\n  return `<span class=\"pill ${cls}\">${(n*100).toFixed(0)}%</span>`;\n}\nfunction countPill(v, warnT, badT){\n  const n = num(v) ?? 0;\n  const cls = n>=badT?'bad':n>=warnT?'warn':'good';\n  return `<span class=\"pill ${cls}\">${n}</span>`;\n}\nfunction pctDeltaHtml(deltaPct, invert){\n  if(deltaPct===null || deltaPct===undefined || isNaN(deltaPct)) return `<span class=\"mini-stat\">no prior month</span>`;\n  const good = invert ? deltaPct<=0 : deltaPct>=0;\n  const cls = good ? 'good' : 'crit';\n  const arrow = deltaPct>=0 ? '\u25b2' : '\u25bc';\n  return `<span class=\"mini-stat ${cls}\"><b>${arrow} ${Math.abs(deltaPct).toFixed(1)}%</b> vs last month</span>`;\n}\nfunction themeColor(varName){\n  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6f93ff';\n}\nfunction chartFontColor(){ return themeColor('--text-dim'); }\nfunction chartGridColor(){\n  const isLight = document.documentElement.getAttribute('data-theme')==='light';\n  return isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';\n}\n\n/* ---------------- generic table component ---------------- */\nfunction createTable(container, columns, rows, opts={}){\n  const state = { search:'', sortKey: opts.defaultSort?.key || null, sortDir: opts.defaultSort?.dir || 'desc', rows };\n  container.innerHTML = `\n    <div class=\"table-toolbar\">\n      <input class=\"table-search\" placeholder=\"${opts.searchPlaceholder || 'Search by name or ID\u2026'}\">\n      <span class=\"table-count\"></span>\n    </div>\n    <div class=\"table-wrap\">\n      <table class=\"data-table\">\n        <thead><tr>${columns.map(c=>`<th data-key=\"${c.key}\">${esc(c.label)}</th>`).join('')}</tr></thead>\n        <tbody></tbody>\n      </table>\n    </div>`;\n  const searchInput = container.querySelector('.table-search');\n  const countEl = container.querySelector('.table-count');\n  const tbody = container.querySelector('tbody');\n  const ths = [...container.querySelectorAll('th')];\n\n  function filtered(){\n    let r = state.rows;\n    if(state.search){\n      const s = state.search.toLowerCase();\n      r = r.filter(row => columns.some(c => {\n        const v = c.searchValue ? c.searchValue(row) : (c.format ? c.format(row) : row[c.key]);\n        return String(v).replace(/<[^>]*>/g,'').toLowerCase().includes(s);\n      }));\n    }\n    if(state.sortKey){\n      const col = columns.find(c=>c.key===state.sortKey);\n      r = [...r].sort((a,b)=>{\n        let va = col.sortValue ? col.sortValue(a) : a[col.key];\n        let vb = col.sortValue ? col.sortValue(b) : b[col.key];\n        if(typeof va === 'string') va = va.toLowerCase();\n        if(typeof vb === 'string') vb = vb.toLowerCase();\n        if(va<vb) return state.sortDir==='asc'?-1:1;\n        if(va>vb) return state.sortDir==='asc'?1:-1;\n        return 0;\n      });\n    }\n    return r;\n  }\n\n  function render(){\n    const rows2 = filtered();\n    countEl.textContent = rows2.length.toLocaleString() + ' rows';\n    tbody.innerHTML = rows2.map(row=>{\n      const id = opts.rowId ? opts.rowId(row) : '';\n      return `<tr data-id=\"${esc(id)}\">${columns.map(c=>{\n        const val = c.format ? c.format(row) : esc(row[c.key]);\n        const cls = c.cellClass ? (typeof c.cellClass==='function'? c.cellClass(row): c.cellClass) : '';\n        return `<td class=\"${cls}\">${val}</td>`;\n      }).join('')}</tr>`;\n    }).join('') || `<tr><td colspan=\"${columns.length}\" style=\"color:var(--text-faint);padding:22px;text-align:center;font-family:var(--font-display);\">No matching rows</td></tr>`;\n    ths.forEach(th=>{\n      const col = columns.find(c=>c.key===th.dataset.key);\n      th.innerHTML = esc(col.label) + (state.sortKey===th.dataset.key ? `<span class=\"arrow\">${state.sortDir==='asc'?'\u25b2':'\u25bc'}</span>` : '');\n    });\n  }\n\n  searchInput.addEventListener('input', e=>{ state.search = e.target.value; render(); });\n  ths.forEach(th=>{\n    th.addEventListener('click', ()=>{\n      const key = th.dataset.key;\n      if(state.sortKey===key){ state.sortDir = state.sortDir==='asc'?'desc':'asc'; }\n      else { state.sortKey = key; state.sortDir = 'desc'; }\n      render();\n    });\n  });\n\n  render();\n\n  return {\n    setRows(newRows){ state.rows = newRows; render(); },\n    clearSearch(){ searchInput.value=''; state.search=''; render(); },\n    searchFor(query){\n      searchInput.value = query; state.search = query; render();\n      requestAnimationFrame(()=>{\n        const row = tbody.querySelector('tr[data-id]');\n        if(row){ row.classList.add('flash'); row.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>row.classList.remove('flash'), 1900); }\n      });\n    }\n  };\n}\n\n/* ---------------- jump / navigation ---------------- */\nfunction jumpTo(sectionId, opts={}){\n  const el = document.getElementById(sectionId);\n  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});\n  const ctrl = sectionControllers[sectionId];\n  if(!ctrl) return;\n  const delay = (opts.team && ctrl.setTeam) ? 380 : 60;\n  if(opts.team && ctrl.setTeam) ctrl.setTeam(opts.team);\n  if(opts.search && ctrl.table){ setTimeout(()=> ctrl.table.searchFor(opts.search), delay); }\n}\nwindow.jumpTo = jumpTo;\n\n/* ==================================================================\n   SIDEBAR\n   ================================================================== */\nfunction renderSidebar(){\n  const sb = document.getElementById('sidebar');\n  const sr = DATA.skillReport;\n  const ms = DATA.mistake;\n  const t = DATA.traffic;\n  const vol = DATA.volume;\n  const speed = DATA.speed;\n  const top = DATA.topPerformers;\n  const internalTot = sr.teamTotals.find(x=>normTeam(x.team)==='INTERNAL');\n  const outsourceTot = sr.teamTotals.find(x=>normTeam(x.team)==='OUTSOURCE');\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  const topMistake = ms.insights.topMistakeAgents[0];\n  const hc = DATA.headcount || {groups:[], total:0};\n  const hcBreakdown = hc.groups.map(g=>`${g.active}${g.vacation?('+'+g.vacation+' vac'):''} ${esc(g.label)}`).join(' \u00b7 ');\n  const bestPerformer = top[0];\n  const at = DATA.attendance || {agents:[], totals:{attendanceRate:0,punctualityRate:0,lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,extraBreakDays:0,extraBreakMinTotal:0}, remarks:[], insights:{}};\n\n  sb.innerHTML = `\n    <div class=\"card\">\n      <div class=\"eyebrow-badge\">${esc(DATA.meta.monthLong.toUpperCase())} \u00b7 ${esc(DATA.meta.region)} MONTHLY REPORT</div>\n      <div class=\"exec-title\">Executive Summary</div>\n      <div class=\"exec-sub\">Traffic, skill, speed &amp; QA quality in one view</div>\n      <div class=\"exec-para\">\n        Current headcount stands at <strong>${hc.total}</strong> (${hcBreakdown || 'no status data on file'}), counting only Active and Vacation. In ${esc(DATA.meta.monthLong)}, the team fielded <strong>${fmtInt(vol.current.total)}</strong> total chats (${pctDeltaHtml(vol.momTotalPct)}) across <strong>${t.brands.filter(b=>b&&b!=='-').length}</strong> brands, split <strong>${fmtInt(vol.current.agent)}</strong> agent-handled and <strong>${fmtInt(vol.current.bot)}</strong> bot-handled for an automation rate of <strong>${Number(vol.current.autoPct||0).toFixed(1)}%</strong>${vol.momAutoPtsChange===null?'':(' ('+(vol.momAutoPtsChange>=0?'+':'')+Number(vol.momAutoPtsChange).toFixed(1)+' pts vs last month)')}. On service levels, <strong>Internal</strong> averaged ${dashOr(internalTot?internalTot.frt:null)} FRT / ${dashOr(internalTot?internalTot.mrt:null)} MRT${outsourceTot?(' versus <strong>Outsource</strong> at '+dashOr(outsourceTot.frt)+' FRT / '+dashOr(outsourceTot.mrt)+' MRT'):''}. Team-wide latency averaged <strong>${fmtSec(speed.avgFrt)}</strong> FRT and <strong>${fmtSec(speed.avgMrt)}</strong> MRT, with <strong>${Number(speed.frtCompliancePct||0).toFixed(0)}%</strong> of agents meeting the 60s FRT target and <strong>${Number(speed.mrtCompliancePct||0).toFixed(0)}%</strong> the 120s MRT target. ${bestPerformer?('<strong>'+esc(bestPerformer.name)+'</strong> led all agents with <strong>'+fmtInt(bestPerformer.totalChat)+'</strong> chats handled'+((top[1]&&top[2])?(', ahead of '+esc(top[1].name)+' ('+fmtInt(top[1].totalChat)+') and '+esc(top[2].name)+' ('+fmtInt(top[2].totalChat)+')'):'')+'. '):'No agent chat volume was recorded this month. '}On quality, <strong>${fmtInt(ms.totalErrors)}</strong> QA errors were logged${ms.mostCommonMistake?(', led by <strong>'+esc(ms.mostCommonMistake.type)+'</strong> ('+ms.mostCommonMistake.count+' instances)'):''}${topMistake?(', with <strong>'+esc(topMistake.name)+'</strong> logging the most overall ('+topMistake.total+')'):''}. ${(DATA.takeaways&&DATA.takeaways.length)?('<strong>Key takeaway:</strong> '+esc(DATA.takeaways[0])+' '):''}Full breakdowns are laid out to the right; click any card below to jump straight to the data.\n      </div>\n    </div>\n\n    ${hc.groups.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Headcount (Active + Vacation)<span class=\"line\"></span></div>\n      ${hc.groups.map(g=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${g.active+g.vacation}</span>\n          <span><b>${esc(g.label)}:</b> ${g.activeAff>0?(g.activeCs+'cs + '+g.activeAff+' aff active'):(g.active+' active')}${g.vacation?(', '+g.vacation+' on vacation'):''}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    ${DATA.remarks.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Team Remarks This Month<span class=\"line\"></span></div>\n      ${DATA.remarks.slice(0,8).map(r=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${esc(r.team)} \u00b7 Wk${esc(r.week)}</span>\n          <span><b>${esc(r.agent)}:</b> ${esc(r.text)}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    <div class=\"nav-section-title\">Report sections \u2014 click to explore</div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('traffic')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">1 \u00b7 Traffic Summary</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Bot dominance: roughly ${autoPct}% of chats resolved without agent intervention this month. Full day-by-day, per-brand data is linked on the right.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${fmtInt(totalAssigned)}</b> agent-assigned</span>\n        <span class=\"mini-stat good\"><b>${fmtInt(totalBot)}</b> bot-handled</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('skill')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">2 \u00b7 Skill Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal vs Outsource \u2014 First Response (FRT) and Second Response (MRT) compared side by side.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>Internal</b> ${dashOr(internalTot?internalTot.frt:null)} FRT \u00b7 ${dashOr(internalTot?internalTot.mrt:null)} MRT</span>\n        <span class=\"mini-stat\"><b>Outsource</b> ${dashOr(outsourceTot?outsourceTot.frt:null)} FRT \u00b7 ${dashOr(outsourceTot?outsourceTot.mrt:null)} MRT</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('mistake')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">3 \u00b7 Mistake Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">QA errors broken down by team and agent${ms.mostCommonMistake?(', most commonly '+esc(ms.mostCommonMistake.type)):''}. Click through for the full per-agent breakdown.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${ms.totalErrors>0?'crit':'good'}\"><b>${fmtInt(ms.totalErrors)}</b> QA errors</span>\n        ${topMistake?('<span class=\"mini-stat\"><b>'+topMistake.total+'</b> \u00b7 '+esc(topMistake.name)+'</span>'):''}\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('speed')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">4 \u00b7 Speed / Latency</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Share of agents meeting the FRT (&le;60s) and MRT (&le;120s) SLA targets this month.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${speed.frtCompliancePct>=70?'good':speed.frtCompliancePct>=40?'warn':'crit'}\"><b>${speed.frtCompliancePct.toFixed(0)}%</b> meet FRT target</span>\n        <span class=\"mini-stat ${speed.mrtCompliancePct>=70?'good':speed.mrtCompliancePct>=40?'warn':'crit'}\"><b>${speed.mrtCompliancePct.toFixed(0)}%</b> meet MRT target</span>\n      </div>\n    </div>\n\n    ${at.agents.length ? `\n    <div class=\"insight-card\" onclick=\"jumpTo('attendance')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">5 \u00b7 Attendance</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal CS only. ${at.totals.lateCount} late check-in(s), ${at.totals.earlyCount} early check-out(s), ${at.totals.extraBreakDays} agent-day(s) over the break allowance.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${at.totals.attendanceRate>=0.9?'good':at.totals.attendanceRate>=0.7?'warn':'crit'}\"><b>${(at.totals.attendanceRate*100).toFixed(0)}%</b> attendance rate</span>\n        <span class=\"mini-stat ${at.totals.punctualityRate>=0.8?'good':at.totals.punctualityRate>=0.5?'warn':'crit'}\"><b>${(at.totals.punctualityRate*100).toFixed(0)}%</b> punctuality rate</span>\n      </div>\n    </div>` : ''}\n\n    <div class=\"insight-card\" onclick=\"jumpTo('takeaways')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">6 \u00b7 Key Takeaways</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">${DATA.takeaways.length} auto-generated, month-over-month takeaways \u2014 volume, automation, and quality trends.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${DATA.takeaways.length}</b> takeaways</span>\n      </div>\n    </div>\n  `;\n}\n\n/* ==================================================================\n   MAIN SECTIONS\n   ================================================================== */\nfunction barRow(label, value, max, colorCls=''){\n  const pct = max>0 ? Math.max(2, (value/max*100)) : 0;\n  return `<div class=\"bar-row\">\n    <div class=\"lbl\" title=\"${esc(label)}\">${esc(label)}</div>\n    <div class=\"bar-track\"><div class=\"bar-fill ${colorCls}\" style=\"width:${pct}%\"></div></div>\n    <div class=\"bar-val\">${typeof value === 'number' && value<=1 ? (value*100).toFixed(0)+'%' : fmtInt(value)}</div>\n  </div>`;\n}\n\n/* ---- 01 \u00b7 Traffic ---- */\nfunction renderTraffic(){\n  const t = DATA.traffic;\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  return `\n  <section class=\"section\" id=\"traffic\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">01</span><span class=\"section-title\">Traffic Summary</span></div>\n    <div class=\"section-desc\">${esc(t.summary)} Day-by-day, per-brand breakdown below.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Assigned</div><div class=\"stat-value blue\">${fmtInt(totalAssigned)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(totalBot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${autoPct}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Brands Tracked</div><div class=\"stat-value\">${t.brands.filter(b=>b && b!=='-').length}</div></div>\n    </div>\n    <div class=\"tabs\" id=\"trafficModeTabs\">\n      <button class=\"tab-btn active\" data-mode=\"assigned\">Agent-Assigned</button>\n      <button class=\"tab-btn\" data-mode=\"bot\">Bot-Handled</button>\n    </div>\n    <div class=\"bar-list\" id=\"trafficBars\"></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Day-by-day breakdown<span class=\"line\"></span></div>\n    <div id=\"trafficTable\"></div>\n  </section>`;\n}\nfunction mountTraffic(){\n  const t = DATA.traffic;\n  const brands = t.brands.filter(b=>b && b!=='-');\n  const barsEl = document.getElementById('trafficBars');\n  const tableEl = document.getElementById('trafficTable');\n  if(!t.assignedDays.length){ tableEl.innerHTML = '<div style=\"color:var(--text-faint);padding:14px 0\">No daily data for this month</div>'; barsEl.innerHTML=''; sectionControllers.traffic={}; return; }\n\n  const columns = [\n    { key:'day', label:'Day', cellClass:'name-cell', sortValue:r=>{ const m=String(r.day).match(/(\\d+)\\s*$/); return m?parseInt(m[1],10):0; } },\n    ...brands.map(b => ({ key:b, label:b, format:r=>fmtInt(r[b]), sortValue:r=>Number(r[b])||0 }))\n  ];\n  const table = createTable(tableEl, columns, t.assignedDays, { searchPlaceholder:'Search by day\u2026', rowId:r=>r.day, defaultSort:{key:'day', dir:'asc'} });\n\n  function renderBars(mode){\n    const totals = mode==='assigned' ? t.totalsAssigned : t.totalsBot;\n    const arr = brands.map(b=>({b, v:Number(totals[b])||0})).sort((a,b)=>b.v-a.v);\n    const max = arr[0]?.v || 1;\n    barsEl.innerHTML = arr.map(x=>barRow(x.b, x.v, max, mode==='bot'?'':'amber')).join('');\n  }\n  renderBars('assigned');\n\n  document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(btn=>{\n    btn.addEventListener('click', ()=>{\n      document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(b=>b.classList.remove('active'));\n      btn.classList.add('active');\n      const mode = btn.dataset.mode;\n      renderBars(mode);\n      table.setRows(mode==='assigned' ? t.assignedDays : t.botDays);\n    });\n  });\n\n  sectionControllers.traffic = { table };\n}\n\n/* ---- 02 \u00b7 Volume (trend chart, agent vs bot, MoM) ---- */\nfunction renderVolume(){\n  const v = DATA.volume;\n  return `\n  <section class=\"section\" id=\"volume\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Volume</span></div>\n    <div class=\"section-desc\">Total chat volume trend for the year, agent vs bot split, and how this month compares to last month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Chats (${esc(DATA.meta.month)})</div><div class=\"stat-value blue\">${fmtInt(v.current.total)}</div><div class=\"stat-foot\">${pctDeltaHtml(v.momTotalPct)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Handled</div><div class=\"stat-value\">${fmtInt(v.current.agent)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(v.current.bot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${v.current.autoPct.toFixed(1)}%</div>\n        <div class=\"stat-foot\">${v.momAutoPtsChange===null?'no prior month':((v.momAutoPtsChange>=0?'\u25b2 ':'\u25bc ')+Math.abs(v.momAutoPtsChange).toFixed(1)+' pts vs last month')}</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"volumeChart\"></canvas></div>\n  </section>`;\n}\nfunction mountVolume(){\n  const v = DATA.volume;\n  const ctx = document.getElementById('volumeChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  if(charts.volume) charts.volume.destroy();\n  charts.volume = new Chart(ctx, {\n    type:'line',\n    data:{\n      labels: v.monthlyTrend.map(r=>r.month),\n      datasets:[\n        { label:'Agent', data:v.monthlyTrend.map(r=>r.agent), borderColor:themeColor('--blue'), backgroundColor:themeColor('--blue'), tension:.35, pointRadius:3, fill:false },\n        { label:'Bot', data:v.monthlyTrend.map(r=>r.bot), borderColor:themeColor('--teal'), backgroundColor:themeColor('--teal'), tension:.35, pointRadius:3, fill:false }\n      ]\n    },\n    options:{\n      responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{\n        x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} },\n        y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), callback:v=>fmtInt(v)} }\n      }\n    }\n  });\n  sectionControllers.volume = {};\n}\n\n/* ---- 03 \u00b7 SLA Performance (was \"Skill Reports\") ---- */\nfunction teamTabsHtml(teams, activeIdx=0){\n  return `<div class=\"tabs\">${teams.map((t,i)=>`<button class=\"tab-btn ${i===activeIdx?'active':''}\" data-idx=\"${i}\">${normTeam(t.team)}</button>`).join('')}</div>`;\n}\nfunction renderSkill(){\n  const sr = DATA.skillReport;\n  return `\n  <section class=\"section\" id=\"skill\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Skill Reports</span></div>\n    <div class=\"section-desc\">${esc(sr.summary)}</div>\n    <div class=\"stat-grid\" id=\"skillStats\"></div>\n    <div class=\"chart-wrap\" style=\"height:220px\"><canvas id=\"skillChart\"></canvas></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Top 10 Agents \u2014 Internal + Outsource<span class=\"line\"></span></div>\n    <div id=\"skillTable\"></div>\n  </section>`;\n}\nfunction mountSkill(){\n  const sr = DATA.skillReport;\n  const statsEl = document.getElementById('skillStats');\n  const tableEl = document.getElementById('skillTable');\n\n  mountSkillChartOnly_();\n\n  // Overall team totals shown side by side (Internal + Outsource) \u2014 no more\n  // per-team tabs, since the agent table below always combines both teams\n  // into one ranked Top 10 list.\n  statsEl.innerHTML = sr.teamTotals.map(t=>`\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} Total Chat</div><div class=\"stat-value blue\">${fmtInt(t.totalChat)}</div></div>\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} FRT / MRT</div><div class=\"stat-value\">${dashOr(t.frt)} / ${dashOr(t.mrt)}</div></div>\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} CSAT</div><div class=\"stat-value ${(t.csat??0)>=0.6?'teal':(t.csat??0)>=0.4?'amber':'red'}\">${((t.csat??0)*100).toFixed(0)}%</div></div>\n  `).join('');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n    { key:'frt', label:'FRT', format:r=>dashOr(r.frt), sortValue:r=>parseTimeStr(r.frt) },\n    { key:'mrt', label:'MRT', format:r=>dashOr(r.mrt), sortValue:r=>parseTimeStr(r.mrt) },\n    { key:'aht', label:'AHT', format:r=>dashOr(r.aht), sortValue:r=>parseTimeStr(r.aht) },\n    { key:'csat', label:'CSAT', format:r=>csatPill(r.csat), sortValue:r=>num(r.csat)??-1 },\n  ];\n\n  // Combine every team's agents into one pool, tag each with its team label,\n  // then rank Internal + Outsource together and keep only the Top 10 by total\n  // chats handled \u2014 this replaces the old per-team tabs + full agent list.\n  const allAgents = [];\n  sr.teams.forEach(team=> team.agents.forEach(a=> allAgents.push(Object.assign({}, a, { team: normTeam(team.team) }))));\n  const top10 = [...allAgents].sort((a,b)=>(num(b.totalChat)??-1)-(num(a.totalChat)??-1)).slice(0,10);\n\n  const table = createTable(tableEl, columns, top10, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n\n  sectionControllers.skill = { table };\n}\nfunction mountSkillChartOnly_(){\n  const sr = DATA.skillReport;\n  const chartCtx = document.getElementById('skillChart');\n  if(!chartCtx || typeof Chart==='undefined') return;\n  if(charts.skill) charts.skill.destroy();\n  const labels = sr.teamTotals.map(t=>normTeam(t.team));\n  charts.skill = new Chart(chartCtx, {\n    type:'bar',\n    data:{ labels, datasets:[\n      { label:'FRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.frt)<0?0:parseTimeStr(t.frt)), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.mrt)<0?0:parseTimeStr(t.mrt)), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n}\n\n/* ---- 04 \u00b7 Top Performers ---- */\nfunction renderTopPerformers(){\n  return `\n  <section class=\"section\" id=\"performers\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Top Performers</span></div>\n    <div class=\"section-desc\">Top agents this month, ranked by total chats handled (Internal + Outsource combined).</div>\n    <div class=\"chart-wrap chart-scroll\" id=\"performersChartWrap\"><div id=\"performersChartInner\"><canvas id=\"performersChart\"></canvas></div></div>\n    <div id=\"performersTable\"></div>\n  </section>`;\n}\nfunction mountTopPerformers(){\n  const top = DATA.topPerformers;\n  const ctx = document.getElementById('performersChart');\n  const inner = document.getElementById('performersChartInner');\n  if(inner) inner.style.height = Math.max(280, top.length*32) + 'px';\n  if(ctx && typeof Chart!=='undefined' && top.length){\n    if(charts.performers) charts.performers.destroy();\n    charts.performers = new Chart(ctx, {\n      type:'bar',\n      data:{ labels: top.map(a=>a.name), datasets:[{ label:'Total Chats', data:top.map(a=>a.totalChat), backgroundColor:top.map(a=>a.team==='Outsource Team'?themeColor('--amber'):themeColor('--blue')) }] },\n      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,\n        plugins:{ legend:{ display:false } },\n        scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n      }\n    });\n  }\n  const columns = [\n    { key:'rank', label:'#', format:r=>String(top.indexOf(r)+1) },\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n  ];\n  const tableEl = document.getElementById('performersTable');\n  const table = createTable(tableEl, columns, top, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n  sectionControllers.performers = { table };\n}\n\n/* ---- 05 \u00b7 Speed / Latency ---- */\nfunction renderSpeed(){\n  const s = DATA.speed;\n  return `\n  <section class=\"section\" id=\"speed\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Speed / Latency</span></div>\n    <div class=\"section-desc\">First Response (FRT \u226460s target) and Second Response (MRT \u2264120s target) compliance across all agents with chats this month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg FRT</div><div class=\"stat-value amber\">${fmtSec(s.avgFrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg MRT</div><div class=\"stat-value blue\">${fmtSec(s.avgMrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg AHT</div><div class=\"stat-value\">${fmtSec(s.avgAht)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">FRT Target Met</div><div class=\"stat-value ${s.frtCompliancePct>=70?'teal':s.frtCompliancePct>=40?'amber':'red'}\">${s.frtCompliancePct.toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">MRT Target Met</div><div class=\"stat-value ${s.mrtCompliancePct>=70?'teal':s.mrtCompliancePct>=40?'amber':'red'}\">${s.mrtCompliancePct.toFixed(0)}%</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"speedChart\"></canvas></div>\n  </section>`;\n}\nfunction mountSpeed(){\n  const s = DATA.speed;\n  const ctx = document.getElementById('speedChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  const top = [...s.agents].sort((a,b)=>b.frtSec-a.frtSec).slice(0,15);\n  if(charts.speed) charts.speed.destroy();\n  charts.speed = new Chart(ctx, {\n    type:'bar',\n    data:{ labels: top.map(a=>a.name), datasets:[\n      { label:'FRT (sec)', data:top.map(a=>a.frtSec), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:top.map(a=>a.mrtSec), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), maxRotation:60, minRotation:60, font:{size:9} } }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n  sectionControllers.speed = {};\n}\n\n/* ---- 05 \u00b7 Attendance (Internal CS only) ---- */\nfunction fmtMin_(totalMin){ if(totalMin===undefined||totalMin===null||isNaN(totalMin)||totalMin<0) return '\u2014'; var h=Math.floor(totalMin/60), m=Math.round(totalMin-h*60); if(m>=60){h+=1;m-=60;} return h+'.'+(m<10?'0'+m:m)+'h'; }\nfunction renderAttendance(){\n  const at = DATA.attendance;\n  if(!at || !at.agents || !at.agents.length){\n    return `\n  <section class=\"section\" id=\"attendance\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Attendance</span></div>\n    <div class=\"section-desc\">Internal CS only \u2014 Outsource attendance isn't tracked.</div>\n    <div class=\"callout-box\" style=\"color:var(--text-faint)\">No attendance data on file for this month.</div>\n  </section>`;\n  }\n  const topLate = at.insights && at.insights.topLateAgent;\n  const topExtra = at.insights && at.insights.topExtraBreakAgent;\n  return `\n  <section class=\"section\" id=\"attendance\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Attendance</span></div>\n    <div class=\"section-desc\">${esc(at.summary)} Internal CS only \u2014 Outsource attendance isn't tracked.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Attendance Rate</div><div class=\"stat-value blue\">${(at.totals.attendanceRate*100).toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Punctuality Rate</div><div class=\"stat-value teal\">${(at.totals.punctualityRate*100).toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Late Check-In</div><div class=\"stat-value amber\">${at.totals.lateCount}</div><div class=\"stat-foot\">${fmtMin_(at.totals.lateMinTotal)} total</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Early Check-Out</div><div class=\"stat-value red\">${at.totals.earlyCount}</div><div class=\"stat-foot\">${fmtMin_(at.totals.earlyMinTotal)} total</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Extra Break (&gt;90min)</div><div class=\"stat-value red\">${at.totals.extraBreakDays}</div><div class=\"stat-foot\">${fmtMin_(at.totals.extraBreakMinTotal)} over allowance</div></div>\n    </div>\n    <div id=\"attendanceTable\"></div>\n    ${at.remarks.length ? `\n    <div class=\"card-title\" style=\"margin-top:14px;\">Attendance Remarks / Exceptions<span class=\"line\"></span></div>\n    <ul class=\"callout-list\">\n      ${at.remarks.slice(0,20).map(r=>`<li style=\"cursor:default\"><span><span class=\"cl-name\">${esc(r.name)}</span><span class=\"cl-id\">${esc(r.date)} \u00b7 ${esc(r.psdId)}</span></span><span style=\"color:var(--amber);font-size:11.5px;max-width:340px;text-align:right\">${esc(r.remark)}</span></li>`).join('')}\n    </ul>` : ''}\n  </section>`;\n}\nfunction mountAttendance(){\n  const at = DATA.attendance;\n  const tableEl = document.getElementById('attendanceTable');\n  if(!tableEl || !at || !at.agents || !at.agents.length) return;\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'daysPresent', label:'Days Present', sortValue:r=>num(r.daysPresent)??0 },\n    { key:'daysOff', label:'Days Off', sortValue:r=>num(r.daysOff)??0 },\n    { key:'attendanceRate', label:'Attendance %', format:r=>(r.attendanceRate*100).toFixed(0)+'%', sortValue:r=>r.attendanceRate },\n    { key:'lateCount', label:'Late', sortValue:r=>num(r.lateCount)??0 },\n    { key:'earlyCount', label:'Early Out', sortValue:r=>num(r.earlyCount)??0 },\n    { key:'extraBreakDays', label:'Extra Break (d)', sortValue:r=>num(r.extraBreakDays)??0 },\n    { key:'avgWorkDurationMin', label:'Avg Work', format:r=>fmtMin_(r.avgWorkDurationMin), sortValue:r=>r.avgWorkDurationMin },\n  ];\n  const table = createTable(tableEl, columns, at.agents, { rowId:r=>r.id, defaultSort:{key:'daysPresent', dir:'desc'} });\n  sectionControllers.attendance = { table };\n}\n\n/* ---- 06 \u00b7 Key Takeaways ---- */\nfunction renderTakeaways(){\n  return `\n  <section class=\"section\" id=\"takeaways\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">06</span><span class=\"section-title\">Key Takeaways</span></div>\n    <div class=\"section-desc\">Auto-generated, month-over-month observations \u2014 volume, automation, and quality trends.</div>\n    <div class=\"callout-box\">\n      <ul class=\"callout-list\" style=\"display:flex;flex-direction:column;gap:10px\">\n        ${DATA.takeaways.map((tk,i)=>`<li style=\"cursor:default;justify-content:flex-start;align-items:flex-start;gap:10px\"><span class=\"change-num\" style=\"margin-top:2px;flex-shrink:0\">${i+1}</span><span style=\"white-space:normal;text-align:left;color:var(--text-dim)\">${esc(tk)}</span></li>`).join('')}\n      </ul>\n    </div>\n  </section>`;\n}\n\n/* ---- shared: Mistake Reports (QA) ---- */\nfunction renderMistake(){\n  const ms = DATA.mistake;\n  const maxType = Math.max(1, ...ms.mistakeTypeCounts.map(m=>m.count));\n  return `\n  <section class=\"section\" id=\"mistake\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">03</span><span class=\"section-title\">Mistake Reports</span></div>\n    <div class=\"section-desc\">${esc(ms.summary)}</div>\n    <div class=\"callout-grid\">\n      <div class=\"callout-box\">\n        <h4>Most Common Errors (All Teams)</h4>\n        <div class=\"bar-list\">\n          ${ms.mistakeTypeCounts.filter(m=>m.count>0).sort((a,b)=>b.count-a.count).map(m=>barRow(m.label, m.count, maxType, 'amber')).join('') || '<div style=\"color:var(--text-faint);font-size:12.5px\">No errors logged this month</div>'}\n        </div>\n      </div>\n      <div class=\"callout-box\">\n        <h4>Agents With Highest Mistakes</h4>\n        <ul class=\"callout-list\">\n          ${ms.insights.topMistakeAgents.slice(0,6).map(a=>`\n            <li onclick=\"jumpTo('mistake',{team:'${esc(a.team)}', search:'${esc(a.id)}'})\">\n              <span><span class=\"cl-name\">${esc(a.name)}</span><span class=\"cl-id\">${esc(a.id)} \u00b7 ${esc(a.team)}</span></span>\n              <span class=\"cl-val\" style=\"color:var(--red)\">${a.total}</span>\n            </li>`).join('') || '<li style=\"color:var(--text-faint)\">No mistakes logged this month</li>'}\n        </ul>\n      </div>\n    </div>\n    <div id=\"mistakeTabs\"></div>\n    <div class=\"stat-grid\" id=\"mistakeStats\"></div>\n    <div id=\"mistakeTable\"></div>\n  </section>`;\n}\nfunction mountMistake(){\n  const ms = DATA.mistake;\n  const totalsByTeam = {};\n  ms.teamTotals.forEach(t=> totalsByTeam[normTeam(t.team)] = t);\n  const tabsEl = document.getElementById('mistakeTabs');\n  const statsEl = document.getElementById('mistakeStats');\n  const tableEl = document.getElementById('mistakeTable');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'notFollowSOP', label:'Not SOP', format:r=>countPill(r.notFollowSOP,1,3), sortValue:r=>num(r.notFollowSOP)??0 },\n    { key:'wrongInfo', label:'Wrong Info', format:r=>countPill(r.wrongInfo,1,3), sortValue:r=>num(r.wrongInfo)??0 },\n    { key:'noSolution', label:'No Solution', format:r=>countPill(r.noSolution,1,3), sortValue:r=>num(r.noSolution)??0 },\n    { key:'noExplanation', label:'No Explanation', format:r=>countPill(r.noExplanation,1,3), sortValue:r=>num(r.noExplanation)??0 },\n    { key:'lateReply', label:'Late Reply', format:r=>fmtInt(r.lateReply), sortValue:r=>num(r.lateReply)??0 },\n    { key:'noReply', label:'No Reply', format:r=>fmtInt(r.noReply), sortValue:r=>num(r.noReply)??0 },\n    { key:'angry', label:'Unprofessional', format:r=>fmtInt(r.angry), sortValue:r=>num(r.angry)??0 },\n    { key:'verbalWarning', label:'Verbal Warn.', format:r=>fmtInt(r.verbalWarning), sortValue:r=>num(r.verbalWarning)??0 },\n    { key:'warningLetter', label:'Warning Letter', format:r=>fmtInt(r.warningLetter), sortValue:r=>num(r.warningLetter)??0 },\n    { key:'total', label:'Total', format:r=>countPill(r.total,3,7), sortValue:r=>num(r.total)??0 },\n  ];\n  let table = null;\n\n  function renderStats(idx){\n    const team = ms.teams[idx];\n    const tot = totalsByTeam[normTeam(team.team)];\n    statsEl.innerHTML = tot ? `\n      <div class=\"stat-card\"><div class=\"stat-label\">Not Follow SOP</div><div class=\"stat-value amber\">${fmtInt(tot.notFollowSOP)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Wrong Information</div><div class=\"stat-value red\">${fmtInt(tot.wrongInfo)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Solution</div><div class=\"stat-value\">${fmtInt(tot.noSolution)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Explanation</div><div class=\"stat-value\">${fmtInt(tot.noExplanation)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Errors</div><div class=\"stat-value blue\">${fmtInt(tot.total)}</div></div>\n    ` : '';\n  }\n\n  function setTeam(idxOrName){\n    let idx = idxOrName;\n    if(typeof idxOrName === 'string'){\n      idx = ms.teams.findIndex(t=> normTeam(t.team)===normTeam(idxOrName));\n      if(idx<0) idx = 0;\n    }\n    tabsEl.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.idx)===idx));\n    renderStats(idx);\n    if(table) table.setRows(ms.teams[idx].agents); else table = createTable(tableEl, columns, ms.teams[idx].agents, { rowId:r=>r.id, defaultSort:{key:'total', dir:'desc'} });\n  }\n\n  tabsEl.innerHTML = teamTabsHtml(ms.teams, 0);\n  tabsEl.querySelectorAll('.tab-btn').forEach(btn=> btn.addEventListener('click', ()=> setTeam(Number(btn.dataset.idx))));\n  setTeam(0);\n\n  sectionControllers.mistake = { setTeam, get table(){ return table; } };\n}\n\n/* ==================================================================\n   GLOBAL SEARCH (agents only \u2014 searches the SLA Performance roster)\n   ================================================================== */\nfunction buildGlobalIndex(){\n  const idx = [];\n  const seen = new Set();\n  DATA.skillReport.teams.forEach(t=> t.agents.forEach(a=>{\n    if(seen.has(a.id)) return; seen.add(a.id);\n    idx.push({ id:a.id, name:a.name, team:normTeam(t.team), section:'skill' });\n  }));\n  return idx;\n}\nfunction mountGlobalSearch(){\n  const idx = buildGlobalIndex();\n  const input = document.getElementById('globalSearch');\n  const results = document.getElementById('globalResults');\n  function render(q){\n    const s = q.trim().toLowerCase();\n    if(!s){ results.classList.remove('show'); results.innerHTML=''; return; }\n    const matches = idx.filter(r => r.id.toLowerCase().includes(s) || r.name.toLowerCase().includes(s)).slice(0,10);\n    results.innerHTML = matches.length ? matches.map(r=>`\n      <div class=\"gr-item\" data-id=\"${esc(r.id)}\" data-team=\"${esc(r.team)}\" data-section=\"${r.section}\">\n        <span class=\"gr-name\">${esc(r.name)}</span>\n        <span class=\"gr-meta\">${esc(r.id)} \u00b7 ${esc(r.team)}</span>\n      </div>`).join('') : `<div class=\"gr-empty\">No agent matches \"${esc(q)}\"</div>`;\n    results.classList.add('show');\n  }\n  input.addEventListener('input', e=> render(e.target.value));\n  input.addEventListener('focus', e=> { if(e.target.value) render(e.target.value); });\n  document.addEventListener('click', e=>{ if(!e.target.closest('.global-search')) results.classList.remove('show'); });\n  results.addEventListener('click', e=>{\n    const item = e.target.closest('.gr-item');\n    if(!item) return;\n    jumpTo('skill', { team: item.dataset.team, search: item.dataset.id });\n    results.classList.remove('show');\n    input.value = '';\n  });\n}\n\n/* ==================================================================\n   THEME TOGGLE (re-renders charts so their colors track the theme)\n   ================================================================== */\nfunction mountThemeToggle(){\n  const btn = document.getElementById('themeToggle');\n  const html = document.documentElement;\n  const stored = localStorage.getItem('ops-theme') || 'dark';\n  html.setAttribute('data-theme', stored);\n  btn.textContent = stored === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n  btn.addEventListener('click', ()=>{\n    const current = html.getAttribute('data-theme');\n    const next = current === 'light' ? 'dark' : 'light';\n    html.setAttribute('data-theme', next);\n    localStorage.setItem('ops-theme', next);\n    btn.textContent = next === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n    mountSpeed(); mountSkillChartOnly_();\n  });\n}\n\n/* ==================================================================\n   BOOT\n   ================================================================== */\nfunction boot(){\n  const brandEl = document.querySelector('.topbar .brand');\n  if(brandEl) brandEl.innerHTML = '<span class=\"dot\"></span> '+esc(DATA.meta.region)+' Monthly Operational Report <span class=\"sub\">\u2014 '+esc(DATA.meta.monthLong)+'</span>';\n  renderSidebar();\n  const main = document.getElementById('main');\n  main.innerHTML = renderTraffic() + renderSkill() + renderMistake() + renderSpeed() + renderAttendance() + renderTakeaways() +\n    `<div class=\"footer-note\">Generated from ${esc(DATA.meta.region)} Google Sheet \u00b7 ${esc(DATA.meta.monthLong)} report \u00b7 ${esc(DATA.meta.generatedAt)}</div>`;\n  mountTraffic();\n  mountSkill();\n  mountMistake();\n  mountSpeed();\n  mountAttendance();\n  mountGlobalSearch();\n  mountThemeToggle();\n}\nboot();\n";
+var REPORT_ENGINE_JS = "const DATA = JSON.parse(document.getElementById('report-data').textContent);\nconst sectionControllers = {};\nconst charts = {};\n\n/* ---------------- helpers ---------------- */\nfunction esc(s){ return String(s===undefined||s===null?'':s).replace(/[&<>\"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); }\nfunction normTeam(s){ return String(s||'').replace(/team/i,'').trim().toUpperCase(); }\nfunction num(v){ return (v===null||v===undefined||v==='-'||v==='') ? null : Number(v); }\nfunction fmtInt(v){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : Math.round(n).toLocaleString(); }\nfunction fmtNum(v, d=2){ const n = num(v); return n===null || isNaN(n) ? '\u2014' : n.toFixed(d); }\nfunction dashOr(v){ return (v===null||v===undefined||v==='-'||v==='') ? '\u2014' : v; }\nfunction fmtSec(sec){ if(!sec || sec<=0) return '\u2014'; const m=Math.floor(sec/60), s=Math.round(sec%60); return m>0 ? (m+'m '+s+'s') : (s+'s'); }\nfunction parseTimeStr(s){\n  if(!s || s==='-') return -1;\n  let t=0; const h=s.match(/(\\d+)h/); if(h) t+=parseInt(h[1])*3600;\n  const m=s.match(/(\\d+)m/); if(m) t+=parseInt(m[1])*60;\n  const sec=s.match(/(\\d+)s/); if(sec) t+=parseInt(sec[1]);\n  return t;\n}\nfunction csatPill(v){\n  const n = num(v);\n  if(n===null || isNaN(n)) return `<span class=\"pill neutral\">\u2014</span>`;\n  if(n>1) return `<span class=\"pill bad\">${n.toFixed(2)} \u26a0</span>`;\n  const cls = n>=0.6?'good':n>=0.4?'warn':'bad';\n  return `<span class=\"pill ${cls}\">${(n*100).toFixed(0)}%</span>`;\n}\nfunction countPill(v, warnT, badT){\n  const n = num(v) ?? 0;\n  const cls = n>=badT?'bad':n>=warnT?'warn':'good';\n  return `<span class=\"pill ${cls}\">${n}</span>`;\n}\nfunction pctDeltaHtml(deltaPct, invert){\n  if(deltaPct===null || deltaPct===undefined || isNaN(deltaPct)) return `<span class=\"mini-stat\">no prior period</span>`;\n  const good = invert ? deltaPct<=0 : deltaPct>=0;\n  const cls = good ? 'good' : 'crit';\n  const arrow = deltaPct>=0 ? '\u25b2' : '\u25bc';\n  return `<span class=\"mini-stat ${cls}\"><b>${arrow} ${Math.abs(deltaPct).toFixed(1)}%</b> vs prior period</span>`;\n}\nfunction themeColor(varName){\n  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || '#6f93ff';\n}\nfunction chartFontColor(){ return themeColor('--text-dim'); }\nfunction chartGridColor(){\n  const isLight = document.documentElement.getAttribute('data-theme')==='light';\n  return isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';\n}\n\n/* ---------------- generic table component ---------------- */\nfunction createTable(container, columns, rows, opts={}){\n  const state = { search:'', sortKey: opts.defaultSort?.key || null, sortDir: opts.defaultSort?.dir || 'desc', rows };\n  container.innerHTML = `\n    <div class=\"table-toolbar\">\n      <input class=\"table-search\" placeholder=\"${opts.searchPlaceholder || 'Search by name or ID\u2026'}\">\n      <span class=\"table-count\"></span>\n    </div>\n    <div class=\"table-wrap\">\n      <table class=\"data-table\">\n        <thead><tr>${columns.map(c=>`<th data-key=\"${c.key}\">${esc(c.label)}</th>`).join('')}</tr></thead>\n        <tbody></tbody>\n      </table>\n    </div>`;\n  const searchInput = container.querySelector('.table-search');\n  const countEl = container.querySelector('.table-count');\n  const tbody = container.querySelector('tbody');\n  const ths = [...container.querySelectorAll('th')];\n\n  function filtered(){\n    let r = state.rows;\n    if(state.search){\n      const s = state.search.toLowerCase();\n      r = r.filter(row => columns.some(c => {\n        const v = c.searchValue ? c.searchValue(row) : (c.format ? c.format(row) : row[c.key]);\n        return String(v).replace(/<[^>]*>/g,'').toLowerCase().includes(s);\n      }));\n    }\n    if(state.sortKey){\n      const col = columns.find(c=>c.key===state.sortKey);\n      r = [...r].sort((a,b)=>{\n        let va = col.sortValue ? col.sortValue(a) : a[col.key];\n        let vb = col.sortValue ? col.sortValue(b) : b[col.key];\n        if(typeof va === 'string') va = va.toLowerCase();\n        if(typeof vb === 'string') vb = vb.toLowerCase();\n        if(va<vb) return state.sortDir==='asc'?-1:1;\n        if(va>vb) return state.sortDir==='asc'?1:-1;\n        return 0;\n      });\n    }\n    return r;\n  }\n\n  function render(){\n    const rows2 = filtered();\n    countEl.textContent = rows2.length.toLocaleString() + ' rows';\n    tbody.innerHTML = rows2.map(row=>{\n      const id = opts.rowId ? opts.rowId(row) : '';\n      return `<tr data-id=\"${esc(id)}\">${columns.map(c=>{\n        const val = c.format ? c.format(row) : esc(row[c.key]);\n        const cls = c.cellClass ? (typeof c.cellClass==='function'? c.cellClass(row): c.cellClass) : '';\n        return `<td class=\"${cls}\">${val}</td>`;\n      }).join('')}</tr>`;\n    }).join('') || `<tr><td colspan=\"${columns.length}\" style=\"color:var(--text-faint);padding:22px;text-align:center;font-family:var(--font-display);\">No matching rows</td></tr>`;\n    ths.forEach(th=>{\n      const col = columns.find(c=>c.key===th.dataset.key);\n      th.innerHTML = esc(col.label) + (state.sortKey===th.dataset.key ? `<span class=\"arrow\">${state.sortDir==='asc'?'\u25b2':'\u25bc'}</span>` : '');\n    });\n  }\n\n  searchInput.addEventListener('input', e=>{ state.search = e.target.value; render(); });\n  ths.forEach(th=>{\n    th.addEventListener('click', ()=>{\n      const key = th.dataset.key;\n      if(state.sortKey===key){ state.sortDir = state.sortDir==='asc'?'desc':'asc'; }\n      else { state.sortKey = key; state.sortDir = 'desc'; }\n      render();\n    });\n  });\n\n  render();\n\n  return {\n    setRows(newRows){ state.rows = newRows; render(); },\n    clearSearch(){ searchInput.value=''; state.search=''; render(); },\n    searchFor(query){\n      searchInput.value = query; state.search = query; render();\n      requestAnimationFrame(()=>{\n        const row = tbody.querySelector('tr[data-id]');\n        if(row){ row.classList.add('flash'); row.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>row.classList.remove('flash'), 1900); }\n      });\n    }\n  };\n}\n\n/* ---------------- jump / navigation ---------------- */\nfunction jumpTo(sectionId, opts={}){\n  const el = document.getElementById(sectionId);\n  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});\n  const ctrl = sectionControllers[sectionId];\n  if(!ctrl) return;\n  const delay = (opts.team && ctrl.setTeam) ? 380 : 60;\n  if(opts.team && ctrl.setTeam) ctrl.setTeam(opts.team);\n  if(opts.search && ctrl.table){ setTimeout(()=> ctrl.table.searchFor(opts.search), delay); }\n}\nwindow.jumpTo = jumpTo;\n\n/* ==================================================================\n   SIDEBAR\n   ================================================================== */\nfunction renderSidebar(){\n  const sb = document.getElementById('sidebar');\n  const sr = DATA.skillReport;\n  const ms = DATA.mistake;\n  const t = DATA.traffic;\n  const vol = DATA.volume;\n  const speed = DATA.speed;\n  const top = DATA.topPerformers;\n  const internalTot = sr.teamTotals.find(x=>normTeam(x.team)==='INTERNAL');\n  const outsourceTot = sr.teamTotals.find(x=>normTeam(x.team)==='OUTSOURCE');\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  const topMistake = ms.insights.topMistakeAgents[0];\n  const hc = DATA.headcount || {groups:[], total:0};\n  const hcBreakdown = hc.groups.map(g=>`${g.active}${g.vacation?('+'+g.vacation+' vac'):''} ${esc(g.label)}`).join(' \u00b7 ');\n  const bestPerformer = top[0];\n  const at = DATA.attendance || {agents:[], totals:{attendanceRate:0,punctualityRate:0,lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,extraBreakDays:0,extraBreakMinTotal:0}, remarks:[], insights:{}};\n\n  sb.innerHTML = `\n    <div class=\"card\">\n      <div class=\"eyebrow-badge\">${esc(DATA.meta.monthLong.toUpperCase())} \u00b7 ${esc(DATA.meta.region)} MONTHLY REPORT</div>\n      <div class=\"exec-title\">Executive Summary</div>\n      <div class=\"exec-sub\">Traffic, skill, speed &amp; QA quality in one view</div>\n      <div class=\"exec-para\">\n        Current headcount stands at <strong>${hc.total}</strong> (${hcBreakdown || 'no status data on file'}), counting only Active and Vacation. In ${esc(DATA.meta.monthLong)}, the team fielded <strong>${fmtInt(vol.current.total)}</strong> total chats (${pctDeltaHtml(vol.momTotalPct)}) across <strong>${t.brands.filter(b=>b&&b!=='-').length}</strong> brands, split <strong>${fmtInt(vol.current.agent)}</strong> agent-handled and <strong>${fmtInt(vol.current.bot)}</strong> bot-handled for an automation rate of <strong>${Number(vol.current.autoPct||0).toFixed(1)}%</strong>${vol.momAutoPtsChange===null?'':(' ('+(vol.momAutoPtsChange>=0?'+':'')+Number(vol.momAutoPtsChange).toFixed(1)+' pts vs prior period)')}. On service levels, <strong>Internal</strong> averaged ${dashOr(internalTot?internalTot.frt:null)} FRT / ${dashOr(internalTot?internalTot.mrt:null)} MRT${outsourceTot?(' versus <strong>Outsource</strong> at '+dashOr(outsourceTot.frt)+' FRT / '+dashOr(outsourceTot.mrt)+' MRT'):''}. Team-wide latency averaged <strong>${fmtSec(speed.avgFrt)}</strong> FRT and <strong>${fmtSec(speed.avgMrt)}</strong> MRT, with <strong>${Number(speed.frtCompliancePct||0).toFixed(0)}%</strong> of agents meeting the 60s FRT target and <strong>${Number(speed.mrtCompliancePct||0).toFixed(0)}%</strong> the 120s MRT target. ${bestPerformer?('<strong>'+esc(bestPerformer.name)+'</strong> led all agents with <strong>'+fmtInt(bestPerformer.totalChat)+'</strong> chats handled'+((top[1]&&top[2])?(', ahead of '+esc(top[1].name)+' ('+fmtInt(top[1].totalChat)+') and '+esc(top[2].name)+' ('+fmtInt(top[2].totalChat)+')'):'')+'. '):'No agent chat volume was recorded this month. '}On quality, <strong>${fmtInt(ms.totalErrors)}</strong> QA errors were logged${ms.mostCommonMistake?(', led by <strong>'+esc(ms.mostCommonMistake.type)+'</strong> ('+ms.mostCommonMistake.count+' instances)'):''}${topMistake?(', with <strong>'+esc(topMistake.name)+'</strong> logging the most overall ('+topMistake.total+')'):''}. ${(DATA.takeaways&&DATA.takeaways.length)?('<strong>Key takeaway:</strong> '+esc(DATA.takeaways[0])+' '):''}Full breakdowns are laid out to the right; click any card below to jump straight to the data.\n      </div>\n    </div>\n\n    ${hc.groups.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Headcount (Active + Vacation)<span class=\"line\"></span></div>\n      ${hc.groups.map(g=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${g.active+g.vacation}</span>\n          <span><b>${esc(g.label)}:</b> ${g.activeAff>0?(g.activeCs+'cs + '+g.activeAff+' aff active'):(g.active+' active')}${g.vacation?(', '+g.vacation+' on vacation'):''}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    ${DATA.remarks.length ? `\n    <div class=\"card\">\n      <div class=\"card-title\">Team Remarks This Month<span class=\"line\"></span></div>\n      ${DATA.remarks.slice(0,8).map(r=>`\n        <div class=\"obstacle-item\">\n          <span class=\"tag-resolved\">${esc(r.team)} \u00b7 Wk${esc(r.week)}</span>\n          <span><b>${esc(r.agent)}:</b> ${esc(r.text)}</span>\n        </div>`).join('')}\n    </div>` : ''}\n\n    <div class=\"nav-section-title\">Report sections \u2014 click to explore</div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('traffic')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">1 \u00b7 Traffic Summary</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Bot dominance: roughly ${autoPct}% of chats resolved without agent intervention this month. Full day-by-day, per-brand data is linked on the right.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${fmtInt(totalAssigned)}</b> agent-assigned</span>\n        <span class=\"mini-stat good\"><b>${fmtInt(totalBot)}</b> bot-handled</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('skill')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">2 \u00b7 Skill Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal vs Outsource \u2014 First Response (FRT) and Second Response (MRT) compared side by side.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>Internal</b> ${dashOr(internalTot?internalTot.frt:null)} FRT \u00b7 ${dashOr(internalTot?internalTot.mrt:null)} MRT</span>\n        <span class=\"mini-stat\"><b>Outsource</b> ${dashOr(outsourceTot?outsourceTot.frt:null)} FRT \u00b7 ${dashOr(outsourceTot?outsourceTot.mrt:null)} MRT</span>\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('mistake')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">3 \u00b7 Mistake Reports</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">QA errors broken down by team and agent${ms.mostCommonMistake?(', most commonly '+esc(ms.mostCommonMistake.type)):''}. Click through for the full per-agent breakdown.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${ms.totalErrors>0?'crit':'good'}\"><b>${fmtInt(ms.totalErrors)}</b> QA errors</span>\n        ${topMistake?('<span class=\"mini-stat\"><b>'+topMistake.total+'</b> \u00b7 '+esc(topMistake.name)+'</span>'):''}\n      </div>\n    </div>\n\n    <div class=\"insight-card\" onclick=\"jumpTo('speed')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">4 \u00b7 Speed / Latency</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Share of agents meeting the FRT (&le;60s) and MRT (&le;120s) SLA targets this month.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${speed.frtCompliancePct>=70?'good':speed.frtCompliancePct>=40?'warn':'crit'}\"><b>${speed.frtCompliancePct.toFixed(0)}%</b> meet FRT target</span>\n        <span class=\"mini-stat ${speed.mrtCompliancePct>=70?'good':speed.mrtCompliancePct>=40?'warn':'crit'}\"><b>${speed.mrtCompliancePct.toFixed(0)}%</b> meet MRT target</span>\n      </div>\n    </div>\n\n    ${at.agents.length ? `\n    <div class=\"insight-card\" onclick=\"jumpTo('attendance')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">5 \u00b7 Attendance</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">Internal CS only. ${at.totals.lateCount} late check-in(s), ${at.totals.earlyCount} early check-out(s), ${at.totals.extraBreakDays} agent-day(s) over the break allowance.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat ${at.totals.attendanceRate>=0.9?'good':at.totals.attendanceRate>=0.7?'warn':'crit'}\"><b>${(at.totals.attendanceRate*100).toFixed(0)}%</b> attendance rate</span>\n        <span class=\"mini-stat ${at.totals.punctualityRate>=0.8?'good':at.totals.punctualityRate>=0.5?'warn':'crit'}\"><b>${(at.totals.punctualityRate*100).toFixed(0)}%</b> punctuality rate</span>\n      </div>\n    </div>` : ''}\n\n    <div class=\"insight-card\" onclick=\"jumpTo('takeaways')\">\n      <div class=\"insight-head\"><span class=\"insight-title\">6 \u00b7 Key Takeaways</span><span class=\"insight-arrow\">\u2192</span></div>\n      <div class=\"insight-body\">${DATA.takeaways.length} auto-generated, month-over-month takeaways \u2014 volume, automation, and quality trends.</div>\n      <div class=\"insight-stat-row\">\n        <span class=\"mini-stat\"><b>${DATA.takeaways.length}</b> takeaways</span>\n      </div>\n    </div>\n  `;\n}\n\n/* ==================================================================\n   MAIN SECTIONS\n   ================================================================== */\nfunction barRow(label, value, max, colorCls=''){\n  const pct = max>0 ? Math.max(2, (value/max*100)) : 0;\n  return `<div class=\"bar-row\">\n    <div class=\"lbl\" title=\"${esc(label)}\">${esc(label)}</div>\n    <div class=\"bar-track\"><div class=\"bar-fill ${colorCls}\" style=\"width:${pct}%\"></div></div>\n    <div class=\"bar-val\">${typeof value === 'number' && value<=1 ? (value*100).toFixed(0)+'%' : fmtInt(value)}</div>\n  </div>`;\n}\n\n/* ---- 01 \u00b7 Traffic ---- */\nfunction renderTraffic(){\n  const t = DATA.traffic;\n  const totalAssigned = Object.values(t.totalsAssigned).reduce((a,b)=>a+(Number(b)||0),0);\n  const totalBot = Object.values(t.totalsBot).reduce((a,b)=>a+(Number(b)||0),0);\n  const autoPct = (totalAssigned+totalBot)>0 ? (totalBot/(totalAssigned+totalBot)*100).toFixed(1) : '0.0';\n  return `\n  <section class=\"section\" id=\"traffic\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">01</span><span class=\"section-title\">Traffic Summary</span></div>\n    <div class=\"section-desc\">${esc(t.summary)} Day-by-day, per-brand breakdown below.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Assigned</div><div class=\"stat-value blue\">${fmtInt(totalAssigned)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(totalBot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${autoPct}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Brands Tracked</div><div class=\"stat-value\">${t.brands.filter(b=>b && b!=='-').length}</div></div>\n    </div>\n    <div class=\"tabs\" id=\"trafficModeTabs\">\n      <button class=\"tab-btn active\" data-mode=\"assigned\">Agent-Assigned</button>\n      <button class=\"tab-btn\" data-mode=\"bot\">Bot-Handled</button>\n    </div>\n    <div class=\"bar-list\" id=\"trafficBars\"></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Day-by-day breakdown<span class=\"line\"></span></div>\n    <div id=\"trafficTable\"></div>\n  </section>`;\n}\nfunction mountTraffic(){\n  const t = DATA.traffic;\n  const brands = t.brands.filter(b=>b && b!=='-');\n  const barsEl = document.getElementById('trafficBars');\n  const tableEl = document.getElementById('trafficTable');\n  if(!t.assignedDays.length){ tableEl.innerHTML = '<div style=\"color:var(--text-faint);padding:14px 0\">No daily data for this month</div>'; barsEl.innerHTML=''; sectionControllers.traffic={}; return; }\n\n  const columns = [\n    { key:'day', label:'Day', cellClass:'name-cell', sortValue:r=>{ const m=String(r.day).match(/(\\d+)\\s*$/); return m?parseInt(m[1],10):0; } },\n    ...brands.map(b => ({ key:b, label:b, format:r=>fmtInt(r[b]), sortValue:r=>Number(r[b])||0 }))\n  ];\n  const table = createTable(tableEl, columns, t.assignedDays, { searchPlaceholder:'Search by day\u2026', rowId:r=>r.day, defaultSort:{key:'day', dir:'asc'} });\n\n  function renderBars(mode){\n    const totals = mode==='assigned' ? t.totalsAssigned : t.totalsBot;\n    const arr = brands.map(b=>({b, v:Number(totals[b])||0})).sort((a,b)=>b.v-a.v);\n    const max = arr[0]?.v || 1;\n    barsEl.innerHTML = arr.map(x=>barRow(x.b, x.v, max, mode==='bot'?'':'amber')).join('');\n  }\n  renderBars('assigned');\n\n  document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(btn=>{\n    btn.addEventListener('click', ()=>{\n      document.querySelectorAll('#trafficModeTabs .tab-btn').forEach(b=>b.classList.remove('active'));\n      btn.classList.add('active');\n      const mode = btn.dataset.mode;\n      renderBars(mode);\n      table.setRows(mode==='assigned' ? t.assignedDays : t.botDays);\n    });\n  });\n\n  sectionControllers.traffic = { table };\n}\n\n/* ---- 02 \u00b7 Volume (trend chart, agent vs bot, MoM) ---- */\nfunction renderVolume(){\n  const v = DATA.volume;\n  return `\n  <section class=\"section\" id=\"volume\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Volume</span></div>\n    <div class=\"section-desc\">Total chat volume trend for the year, agent vs bot split, and how this month compares to last month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Chats (${esc(DATA.meta.month)})</div><div class=\"stat-value blue\">${fmtInt(v.current.total)}</div><div class=\"stat-foot\">${pctDeltaHtml(v.momTotalPct)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Agent-Handled</div><div class=\"stat-value\">${fmtInt(v.current.agent)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Bot-Handled</div><div class=\"stat-value teal\">${fmtInt(v.current.bot)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Automation Rate</div><div class=\"stat-value teal\">${v.current.autoPct.toFixed(1)}%</div>\n        <div class=\"stat-foot\">${v.momAutoPtsChange===null?'no prior period':((v.momAutoPtsChange>=0?'\u25b2 ':'\u25bc ')+Math.abs(v.momAutoPtsChange).toFixed(1)+' pts vs prior period')}</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"volumeChart\"></canvas></div>\n  </section>`;\n}\nfunction mountVolume(){\n  const v = DATA.volume;\n  const ctx = document.getElementById('volumeChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  if(charts.volume) charts.volume.destroy();\n  charts.volume = new Chart(ctx, {\n    type:'line',\n    data:{\n      labels: v.monthlyTrend.map(r=>r.month),\n      datasets:[\n        { label:'Agent', data:v.monthlyTrend.map(r=>r.agent), borderColor:themeColor('--blue'), backgroundColor:themeColor('--blue'), tension:.35, pointRadius:3, fill:false },\n        { label:'Bot', data:v.monthlyTrend.map(r=>r.bot), borderColor:themeColor('--teal'), backgroundColor:themeColor('--teal'), tension:.35, pointRadius:3, fill:false }\n      ]\n    },\n    options:{\n      responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{\n        x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} },\n        y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), callback:v=>fmtInt(v)} }\n      }\n    }\n  });\n  sectionControllers.volume = {};\n}\n\n/* ---- 03 \u00b7 SLA Performance (was \"Skill Reports\") ---- */\nfunction teamTabsHtml(teams, activeIdx=0){\n  return `<div class=\"tabs\">${teams.map((t,i)=>`<button class=\"tab-btn ${i===activeIdx?'active':''}\" data-idx=\"${i}\">${normTeam(t.team)}</button>`).join('')}</div>`;\n}\nfunction renderSkill(){\n  const sr = DATA.skillReport;\n  return `\n  <section class=\"section\" id=\"skill\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">02</span><span class=\"section-title\">Skill Reports</span></div>\n    <div class=\"section-desc\">${esc(sr.summary)}</div>\n    <div class=\"stat-grid\" id=\"skillStats\"></div>\n    <div class=\"chart-wrap\" style=\"height:220px\"><canvas id=\"skillChart\"></canvas></div>\n    <div class=\"card-title\" style=\"margin-top:6px;\">Top 10 Agents \u2014 Internal + Outsource<span class=\"line\"></span></div>\n    <div id=\"skillTable\"></div>\n  </section>`;\n}\nfunction mountSkill(){\n  const sr = DATA.skillReport;\n  const statsEl = document.getElementById('skillStats');\n  const tableEl = document.getElementById('skillTable');\n\n  mountSkillChartOnly_();\n\n  // Overall team totals shown side by side (Internal + Outsource) \u2014 no more\n  // per-team tabs, since the agent table below always combines both teams\n  // into one ranked Top 10 list.\n  statsEl.innerHTML = sr.teamTotals.map(t=>`\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} Total Chat</div><div class=\"stat-value blue\">${fmtInt(t.totalChat)}</div></div>\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} FRT / MRT</div><div class=\"stat-value\">${dashOr(t.frt)} / ${dashOr(t.mrt)}</div></div>\n    <div class=\"stat-card\"><div class=\"stat-label\">${esc(normTeam(t.team))} CSAT</div><div class=\"stat-value ${(t.csat??0)>=0.6?'teal':(t.csat??0)>=0.4?'amber':'red'}\">${((t.csat??0)*100).toFixed(0)}%</div></div>\n  `).join('');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n    { key:'frt', label:'FRT', format:r=>dashOr(r.frt), sortValue:r=>parseTimeStr(r.frt) },\n    { key:'mrt', label:'MRT', format:r=>dashOr(r.mrt), sortValue:r=>parseTimeStr(r.mrt) },\n    { key:'aht', label:'AHT', format:r=>dashOr(r.aht), sortValue:r=>parseTimeStr(r.aht) },\n    { key:'csat', label:'CSAT', format:r=>csatPill(r.csat), sortValue:r=>num(r.csat)??-1 },\n  ];\n\n  // Combine every team's agents into one pool, tag each with its team label,\n  // then rank Internal + Outsource together and keep only the Top 10 by total\n  // chats handled \u2014 this replaces the old per-team tabs + full agent list.\n  const allAgents = [];\n  sr.teams.forEach(team=> team.agents.forEach(a=> allAgents.push(Object.assign({}, a, { team: normTeam(team.team) }))));\n  const top10 = [...allAgents].sort((a,b)=>(num(b.totalChat)??-1)-(num(a.totalChat)??-1)).slice(0,10);\n\n  const table = createTable(tableEl, columns, top10, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n\n  sectionControllers.skill = { table };\n}\nfunction mountSkillChartOnly_(){\n  const sr = DATA.skillReport;\n  const chartCtx = document.getElementById('skillChart');\n  if(!chartCtx || typeof Chart==='undefined') return;\n  if(charts.skill) charts.skill.destroy();\n  const labels = sr.teamTotals.map(t=>normTeam(t.team));\n  charts.skill = new Chart(chartCtx, {\n    type:'bar',\n    data:{ labels, datasets:[\n      { label:'FRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.frt)<0?0:parseTimeStr(t.frt)), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:sr.teamTotals.map(t=>parseTimeStr(t.mrt)<0?0:parseTimeStr(t.mrt)), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n}\n\n/* ---- 04 \u00b7 Top Performers ---- */\nfunction renderTopPerformers(){\n  return `\n  <section class=\"section\" id=\"performers\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Top Performers</span></div>\n    <div class=\"section-desc\">Top agents this month, ranked by total chats handled (Internal + Outsource combined).</div>\n    <div class=\"chart-wrap chart-scroll\" id=\"performersChartWrap\"><div id=\"performersChartInner\"><canvas id=\"performersChart\"></canvas></div></div>\n    <div id=\"performersTable\"></div>\n  </section>`;\n}\nfunction mountTopPerformers(){\n  const top = DATA.topPerformers;\n  const ctx = document.getElementById('performersChart');\n  const inner = document.getElementById('performersChartInner');\n  if(inner) inner.style.height = Math.max(280, top.length*32) + 'px';\n  if(ctx && typeof Chart!=='undefined' && top.length){\n    if(charts.performers) charts.performers.destroy();\n    charts.performers = new Chart(ctx, {\n      type:'bar',\n      data:{ labels: top.map(a=>a.name), datasets:[{ label:'Total Chats', data:top.map(a=>a.totalChat), backgroundColor:top.map(a=>a.team==='Outsource Team'?themeColor('--amber'):themeColor('--blue')) }] },\n      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,\n        plugins:{ legend:{ display:false } },\n        scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n      }\n    });\n  }\n  const columns = [\n    { key:'rank', label:'#', format:r=>String(top.indexOf(r)+1) },\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'team', label:'Team' },\n    { key:'totalChat', label:'Total Chat', format:r=>fmtInt(r.totalChat), sortValue:r=>num(r.totalChat)??-1 },\n  ];\n  const tableEl = document.getElementById('performersTable');\n  const table = createTable(tableEl, columns, top, { rowId:r=>r.id, defaultSort:{key:'totalChat', dir:'desc'} });\n  sectionControllers.performers = { table };\n}\n\n/* ---- 05 \u00b7 Speed / Latency ---- */\nfunction renderSpeed(){\n  const s = DATA.speed;\n  return `\n  <section class=\"section\" id=\"speed\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">04</span><span class=\"section-title\">Speed / Latency</span></div>\n    <div class=\"section-desc\">First Response (FRT \u226460s target) and Second Response (MRT \u2264120s target) compliance across all agents with chats this month.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg FRT</div><div class=\"stat-value amber\">${fmtSec(s.avgFrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg MRT</div><div class=\"stat-value blue\">${fmtSec(s.avgMrt)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Avg AHT</div><div class=\"stat-value\">${fmtSec(s.avgAht)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">FRT Target Met</div><div class=\"stat-value ${s.frtCompliancePct>=70?'teal':s.frtCompliancePct>=40?'amber':'red'}\">${s.frtCompliancePct.toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">MRT Target Met</div><div class=\"stat-value ${s.mrtCompliancePct>=70?'teal':s.mrtCompliancePct>=40?'amber':'red'}\">${s.mrtCompliancePct.toFixed(0)}%</div></div>\n    </div>\n    <div class=\"chart-wrap\"><canvas id=\"speedChart\"></canvas></div>\n  </section>`;\n}\nfunction mountSpeed(){\n  const s = DATA.speed;\n  const ctx = document.getElementById('speedChart');\n  if(!ctx || typeof Chart==='undefined') return;\n  const top = [...s.agents].sort((a,b)=>b.frtSec-a.frtSec).slice(0,15);\n  if(charts.speed) charts.speed.destroy();\n  charts.speed = new Chart(ctx, {\n    type:'bar',\n    data:{ labels: top.map(a=>a.name), datasets:[\n      { label:'FRT (sec)', data:top.map(a=>a.frtSec), backgroundColor:themeColor('--amber') },\n      { label:'MRT (sec)', data:top.map(a=>a.mrtSec), backgroundColor:themeColor('--blue') }\n    ]},\n    options:{ responsive:true, maintainAspectRatio:false,\n      plugins:{ legend:{ display:true, labels:{ color:chartFontColor() } } },\n      scales:{ x:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor(), maxRotation:60, minRotation:60, font:{size:9} } }, y:{ grid:{color:chartGridColor()}, ticks:{color:chartFontColor()} } }\n    }\n  });\n  sectionControllers.speed = {};\n}\n\n/* ---- 05 \u00b7 Attendance (Internal CS only) ---- */\nfunction fmtMin_(totalMin){ if(totalMin===undefined||totalMin===null||isNaN(totalMin)||totalMin<0) return '\u2014'; var t=Math.round(totalMin); if(t<60) return t+'min'; var h=Math.floor(t/60), m=t-h*60; if(m===0) return h+'h'; return h+'.'+(m<10?'0'+m:m)+'h'; }\nfunction renderAttendance(){\n  const at = DATA.attendance;\n  if(!at || !at.agents || !at.agents.length){\n    return `\n  <section class=\"section\" id=\"attendance\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Attendance</span></div>\n    <div class=\"section-desc\">Internal CS only \u2014 Outsource attendance isn't tracked.</div>\n    <div class=\"callout-box\" style=\"color:var(--text-faint)\">${esc((DATA.attendance&&DATA.attendance.summary)||'No attendance data on file for this period.')}</div>\n  </section>`;\n  }\n  const topLate = at.insights && at.insights.topLateAgent;\n  const topExtra = at.insights && at.insights.topExtraBreakAgent;\n  return `\n  <section class=\"section\" id=\"attendance\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">05</span><span class=\"section-title\">Attendance</span></div>\n    <div class=\"section-desc\">${esc(at.summary)} Internal CS only \u2014 Outsource attendance isn't tracked.</div>\n    <div class=\"stat-grid\">\n      <div class=\"stat-card\"><div class=\"stat-label\">Attendance Rate</div><div class=\"stat-value blue\">${(at.totals.attendanceRate*100).toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Punctuality Rate</div><div class=\"stat-value teal\">${(at.totals.punctualityRate*100).toFixed(0)}%</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Late Check-In</div><div class=\"stat-value amber\">${at.totals.lateCount}</div><div class=\"stat-foot\">${fmtMin_(at.totals.lateMinTotal)} total</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Early Check-Out</div><div class=\"stat-value red\">${at.totals.earlyCount}</div><div class=\"stat-foot\">${fmtMin_(at.totals.earlyMinTotal)} total</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Extra Break (&gt;90min)</div><div class=\"stat-value red\">${at.totals.extraBreakDays}</div><div class=\"stat-foot\">${fmtMin_(at.totals.extraBreakMinTotal)} over allowance</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">\u26a0\ufe0f Anomaly (Dup. Check-In)</div><div class=\"stat-value red\">${at.totals.anomalyDays||0}</div><div class=\"stat-foot\">agent-days with 2+ punches same day</div></div>\n    </div>\n    <div id=\"attendanceTable\"></div>\n    ${at.remarks.length ? `\n    <div class=\"card-title\" style=\"margin-top:14px;\">Attendance Remarks / Exceptions<span class=\"line\"></span></div>\n    <ul class=\"callout-list\">\n      ${at.remarks.slice(0,20).map(r=>`<li style=\"cursor:default\"><span><span class=\"cl-name\">${esc(r.name)}</span><span class=\"cl-id\">${esc(r.date)} \u00b7 ${esc(r.psdId)}</span></span><span style=\"color:var(--amber);font-size:11.5px;max-width:340px;text-align:right\">${esc(r.remark)}</span></li>`).join('')}\n    </ul>` : ''}\n  </section>`;\n}\nfunction mountAttendance(){\n  const at = DATA.attendance;\n  const tableEl = document.getElementById('attendanceTable');\n  if(!tableEl || !at || !at.agents || !at.agents.length) return;\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'daysPresent', label:'Days Present', sortValue:r=>num(r.daysPresent)??0 },\n    { key:'daysOff', label:'Days Off', sortValue:r=>num(r.daysOff)??0 },\n    { key:'attendanceRate', label:'Attendance %', format:r=>(r.attendanceRate*100).toFixed(0)+'%', sortValue:r=>r.attendanceRate },\n    { key:'lateCount', label:'Late', sortValue:r=>num(r.lateCount)??0 },\n    { key:'earlyCount', label:'Early Out', sortValue:r=>num(r.earlyCount)??0 },\n    { key:'extraBreakDays', label:'Extra Break (d)', sortValue:r=>num(r.extraBreakDays)??0 },\n    { key:'avgWorkDurationMin', label:'Avg Work', format:r=>fmtMin_(r.avgWorkDurationMin), sortValue:r=>r.avgWorkDurationMin },\n    { key:'anomalyDays', label:'\u26a0\ufe0f Anomaly', format:r=>(r.anomalyDays>0?('\u26a0\ufe0f '+r.anomalyDays):'\u2014'), cellClass:r=>r.anomalyDays>0?'':'', sortValue:r=>num(r.anomalyDays)??0 },\n  ];\n  const table = createTable(tableEl, columns, at.agents, { rowId:r=>r.id, defaultSort:{key:'daysPresent', dir:'desc'} });\n  sectionControllers.attendance = { table };\n}\n\n/* ---- 06 \u00b7 Key Takeaways ---- */\nfunction renderTakeaways(){\n  return `\n  <section class=\"section\" id=\"takeaways\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">06</span><span class=\"section-title\">Key Takeaways</span></div>\n    <div class=\"section-desc\">Auto-generated, month-over-month observations \u2014 volume, automation, and quality trends.</div>\n    <div class=\"callout-box\">\n      <ul class=\"callout-list\" style=\"display:flex;flex-direction:column;gap:10px\">\n        ${DATA.takeaways.map((tk,i)=>`<li style=\"cursor:default;justify-content:flex-start;align-items:flex-start;gap:10px\"><span class=\"change-num\" style=\"margin-top:2px;flex-shrink:0\">${i+1}</span><span style=\"white-space:normal;text-align:left;color:var(--text-dim)\">${esc(tk)}</span></li>`).join('')}\n      </ul>\n    </div>\n  </section>`;\n}\n\n/* ---- shared: Mistake Reports (QA) ---- */\nfunction renderMistake(){\n  const ms = DATA.mistake;\n  const maxType = Math.max(1, ...ms.mistakeTypeCounts.map(m=>m.count));\n  return `\n  <section class=\"section\" id=\"mistake\">\n    <div class=\"section-head\"><span class=\"section-eyebrow\">03</span><span class=\"section-title\">Mistake Reports</span></div>\n    <div class=\"section-desc\">${esc(ms.summary)}</div>\n    <div class=\"callout-grid\">\n      <div class=\"callout-box\">\n        <h4>Most Common Errors (All Teams)</h4>\n        <div class=\"bar-list\">\n          ${ms.mistakeTypeCounts.filter(m=>m.count>0).sort((a,b)=>b.count-a.count).map(m=>barRow(m.label, m.count, maxType, 'amber')).join('') || '<div style=\"color:var(--text-faint);font-size:12.5px\">No errors logged this month</div>'}\n        </div>\n      </div>\n      <div class=\"callout-box\">\n        <h4>Agents With Highest Mistakes</h4>\n        <ul class=\"callout-list\">\n          ${ms.insights.topMistakeAgents.slice(0,6).map(a=>`\n            <li onclick=\"jumpTo('mistake',{team:'${esc(a.team)}', search:'${esc(a.id)}'})\">\n              <span><span class=\"cl-name\">${esc(a.name)}</span><span class=\"cl-id\">${esc(a.id)} \u00b7 ${esc(a.team)}</span></span>\n              <span class=\"cl-val\" style=\"color:var(--red)\">${a.total}</span>\n            </li>`).join('') || '<li style=\"color:var(--text-faint)\">No mistakes logged this month</li>'}\n        </ul>\n      </div>\n    </div>\n    <div id=\"mistakeTabs\"></div>\n    <div class=\"stat-grid\" id=\"mistakeStats\"></div>\n    <div id=\"mistakeTable\"></div>\n  </section>`;\n}\nfunction mountMistake(){\n  const ms = DATA.mistake;\n  const totalsByTeam = {};\n  ms.teamTotals.forEach(t=> totalsByTeam[normTeam(t.team)] = t);\n  const tabsEl = document.getElementById('mistakeTabs');\n  const statsEl = document.getElementById('mistakeStats');\n  const tableEl = document.getElementById('mistakeTable');\n\n  const columns = [\n    { key:'id', label:'PSD-ID' },\n    { key:'name', label:'Name', cellClass:'name-cell' },\n    { key:'notFollowSOP', label:'Not SOP', format:r=>countPill(r.notFollowSOP,1,3), sortValue:r=>num(r.notFollowSOP)??0 },\n    { key:'wrongInfo', label:'Wrong Info', format:r=>countPill(r.wrongInfo,1,3), sortValue:r=>num(r.wrongInfo)??0 },\n    { key:'noSolution', label:'No Solution', format:r=>countPill(r.noSolution,1,3), sortValue:r=>num(r.noSolution)??0 },\n    { key:'noExplanation', label:'No Explanation', format:r=>countPill(r.noExplanation,1,3), sortValue:r=>num(r.noExplanation)??0 },\n    { key:'lateReply', label:'Late Reply', format:r=>fmtInt(r.lateReply), sortValue:r=>num(r.lateReply)??0 },\n    { key:'noReply', label:'No Reply', format:r=>fmtInt(r.noReply), sortValue:r=>num(r.noReply)??0 },\n    { key:'angry', label:'Unprofessional', format:r=>fmtInt(r.angry), sortValue:r=>num(r.angry)??0 },\n    { key:'verbalWarning', label:'Verbal Warn.', format:r=>fmtInt(r.verbalWarning), sortValue:r=>num(r.verbalWarning)??0 },\n    { key:'warningLetter', label:'Warning Letter', format:r=>fmtInt(r.warningLetter), sortValue:r=>num(r.warningLetter)??0 },\n    { key:'total', label:'Total', format:r=>countPill(r.total,3,7), sortValue:r=>num(r.total)??0 },\n  ];\n  let table = null;\n\n  function renderStats(idx){\n    const team = ms.teams[idx];\n    const tot = totalsByTeam[normTeam(team.team)];\n    statsEl.innerHTML = tot ? `\n      <div class=\"stat-card\"><div class=\"stat-label\">Not Follow SOP</div><div class=\"stat-value amber\">${fmtInt(tot.notFollowSOP)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Wrong Information</div><div class=\"stat-value red\">${fmtInt(tot.wrongInfo)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Solution</div><div class=\"stat-value\">${fmtInt(tot.noSolution)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">No Explanation</div><div class=\"stat-value\">${fmtInt(tot.noExplanation)}</div></div>\n      <div class=\"stat-card\"><div class=\"stat-label\">Total Errors</div><div class=\"stat-value blue\">${fmtInt(tot.total)}</div></div>\n    ` : '';\n  }\n\n  function setTeam(idxOrName){\n    let idx = idxOrName;\n    if(typeof idxOrName === 'string'){\n      idx = ms.teams.findIndex(t=> normTeam(t.team)===normTeam(idxOrName));\n      if(idx<0) idx = 0;\n    }\n    tabsEl.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', Number(b.dataset.idx)===idx));\n    renderStats(idx);\n    if(table) table.setRows(ms.teams[idx].agents); else table = createTable(tableEl, columns, ms.teams[idx].agents, { rowId:r=>r.id, defaultSort:{key:'total', dir:'desc'} });\n  }\n\n  tabsEl.innerHTML = teamTabsHtml(ms.teams, 0);\n  tabsEl.querySelectorAll('.tab-btn').forEach(btn=> btn.addEventListener('click', ()=> setTeam(Number(btn.dataset.idx))));\n  setTeam(0);\n\n  sectionControllers.mistake = { setTeam, get table(){ return table; } };\n}\n\n/* ==================================================================\n   GLOBAL SEARCH (agents only \u2014 searches the SLA Performance roster)\n   ================================================================== */\nfunction buildGlobalIndex(){\n  const idx = [];\n  const seen = new Set();\n  DATA.skillReport.teams.forEach(t=> t.agents.forEach(a=>{\n    if(seen.has(a.id)) return; seen.add(a.id);\n    idx.push({ id:a.id, name:a.name, team:normTeam(t.team), section:'skill' });\n  }));\n  return idx;\n}\nfunction mountGlobalSearch(){\n  const idx = buildGlobalIndex();\n  const input = document.getElementById('globalSearch');\n  const results = document.getElementById('globalResults');\n  function render(q){\n    const s = q.trim().toLowerCase();\n    if(!s){ results.classList.remove('show'); results.innerHTML=''; return; }\n    const matches = idx.filter(r => r.id.toLowerCase().includes(s) || r.name.toLowerCase().includes(s)).slice(0,10);\n    results.innerHTML = matches.length ? matches.map(r=>`\n      <div class=\"gr-item\" data-id=\"${esc(r.id)}\" data-team=\"${esc(r.team)}\" data-section=\"${r.section}\">\n        <span class=\"gr-name\">${esc(r.name)}</span>\n        <span class=\"gr-meta\">${esc(r.id)} \u00b7 ${esc(r.team)}</span>\n      </div>`).join('') : `<div class=\"gr-empty\">No agent matches \"${esc(q)}\"</div>`;\n    results.classList.add('show');\n  }\n  input.addEventListener('input', e=> render(e.target.value));\n  input.addEventListener('focus', e=> { if(e.target.value) render(e.target.value); });\n  document.addEventListener('click', e=>{ if(!e.target.closest('.global-search')) results.classList.remove('show'); });\n  results.addEventListener('click', e=>{\n    const item = e.target.closest('.gr-item');\n    if(!item) return;\n    jumpTo('skill', { team: item.dataset.team, search: item.dataset.id });\n    results.classList.remove('show');\n    input.value = '';\n  });\n}\n\n/* ==================================================================\n   THEME TOGGLE (re-renders charts so their colors track the theme)\n   ================================================================== */\nfunction mountThemeToggle(){\n  const btn = document.getElementById('themeToggle');\n  const html = document.documentElement;\n  const stored = localStorage.getItem('ops-theme') || 'dark';\n  html.setAttribute('data-theme', stored);\n  btn.textContent = stored === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n  btn.addEventListener('click', ()=>{\n    const current = html.getAttribute('data-theme');\n    const next = current === 'light' ? 'dark' : 'light';\n    html.setAttribute('data-theme', next);\n    localStorage.setItem('ops-theme', next);\n    btn.textContent = next === 'light' ? '\ud83c\udf19' : '\u2600\ufe0f';\n    mountSpeed(); mountSkillChartOnly_();\n  });\n}\n\n/* ==================================================================\n   BOOT\n   ================================================================== */\nfunction boot(){\n  const brandEl = document.querySelector('.topbar .brand');\n  if(brandEl) brandEl.innerHTML = '<span class=\"dot\"></span> '+esc(DATA.meta.region)+' Monthly Operational Report <span class=\"sub\">\u2014 '+esc(DATA.meta.monthLong)+'</span>';\n  renderSidebar();\n  const main = document.getElementById('main');\n  main.innerHTML = renderTraffic() + renderSkill() + renderMistake() + renderSpeed() + renderAttendance() + renderTakeaways() +\n    `<div class=\"footer-note\">Generated from ${esc(DATA.meta.region)} Google Sheet \u00b7 ${esc(DATA.meta.monthLong)} report \u00b7 ${esc(DATA.meta.generatedAt)}</div>`;\n  mountTraffic();\n  mountSkill();\n  mountMistake();\n  mountSpeed();\n  mountAttendance();\n  mountGlobalSearch();\n  mountThemeToggle();\n}\nboot();\n";
 
-function buildMonthReportHtml_(month){
+function buildMonthReportHtml_(periodKey){
+  var month=periodKey; // kept as "month" so DATA_OBJ.meta.month below is unchanged
   var MONTHS_LONG={Jan:'January',Feb:'February',Mar:'March',Apr:'April',May:'May',Jun:'June',Jul:'July',Aug:'August',Sep:'September',Oct:'October',Nov:'November',Dec:'December'};
-  var monthLong=MONTHS_LONG[month]||month;
+  // expandMonths() already returns a 1-item array for a plain "Jan".."Dec" value,
+  // or the 6 months of H1/H2 — so every section below can just iterate
+  // periodMonths without a separate single-month code path.
+  var periodMonths=expandMonths(periodKey);
+  var isPeriod=periodMonths.length>1;
+  var monthLong=isPeriod?(periodKey==='H1'?'H1 2026 (Jan \u2013 Jun)':'H2 2026 (Jul \u2013 Dec)'):(MONTHS_LONG[periodKey]||periodKey);
 
   // ── TRAFFIC SUMMARY (from Daily Chat Report) ──
   var dp=(raw.daily&&raw.daily.length)?parseDailySheet(raw.daily):{months:{},brands:[]};
-  var monthDaily=dp.months&&dp.months[month];
   var brands=(dp.brands&&dp.brands.length)?dp.brands:[];
-  var days=monthDaily?monthDaily.days:[];
-  var assignedDays=days.map(function(d){ var row={day:d.date}; brands.forEach(function(b){row[b]=d['ag_'+b]||0;}); return row; });
-  var botDays=days.map(function(d){ var row={day:d.date}; brands.forEach(function(b){row[b]=d['bt_'+b]||0;}); return row; });
+  var periodDailyList=periodMonths.map(function(m){return {m:m,md:dp.months&&dp.months[m]};}).filter(function(x){return x.md;});
+  var assignedDays=[];
+  var botDays=[];
+  periodDailyList.forEach(function(x){
+    (x.md.days||[]).forEach(function(d){
+      var dayLbl=isPeriod?(x.m+' '+d.date):d.date;
+      var rowA={day:dayLbl}; brands.forEach(function(b){rowA[b]=d['ag_'+b]||0;}); assignedDays.push(rowA);
+      var rowB={day:dayLbl}; brands.forEach(function(b){rowB[b]=d['bt_'+b]||0;}); botDays.push(rowB);
+    });
+  });
   var totalsAssigned={}, totalsBot={};
   brands.forEach(function(b){
-    totalsAssigned[b]=(monthDaily&&monthDaily.totAg)?(monthDaily.totAg[b]||0):0;
-    totalsBot[b]=(monthDaily&&monthDaily.totBot)?(monthDaily.totBot[b]||0):0;
+    totalsAssigned[b]=periodDailyList.reduce(function(s,x){return s+((x.md.totAg&&x.md.totAg[b])||0);},0);
+    totalsBot[b]=periodDailyList.reduce(function(s,x){return s+((x.md.totBot&&x.md.totBot[b])||0);},0);
   });
   var totAssignedSum=brands.reduce(function(s,b){return s+totalsAssigned[b];},0);
   var totBotSum=brands.reduce(function(s,b){return s+totalsBot[b];},0);
   var autoPctNum=(totAssignedSum+totBotSum)>0?(totBotSum/(totAssignedSum+totBotSum)*100):0;
-  var trafficSummary='Bots handled '+autoPctNum.toFixed(1)+'% of all chat traffic across '+brands.length+' brand'+(brands.length===1?'':'s')+' this month.';
+  var trafficSummary='Bots handled '+autoPctNum.toFixed(1)+'% of all chat traffic across '+brands.length+' brand'+(brands.length===1?'':'s')+(isPeriod?' this period.':' this month.');
   var trafficData={brands:brands,assignedDays:assignedDays,botDays:botDays,totalsAssigned:totalsAssigned,totalsBot:totalsBot,summary:trafficSummary};
 
   // ── SKILL REPORTS (from SLA Metrics, grouped Internal vs Outsource — the
-  // only team dimension this dashboard's SLA sheets track) ──
+  // only team dimension this dashboard's SLA sheets track). Aggregated across
+  // every month in the selected period (chat-weighted for H1/H2 exports so a
+  // slow-but-quiet month doesn't skew the period average). ──
   var spCX=(raw.sla&&raw.sla.length)?parseSLA(raw.sla,'CX'):{months:{},monthList:[]};
   var spOut=(raw.slaOut&&raw.slaOut.length)?parseSLA(raw.slaOut,'Outsource'):{months:{},monthList:[]};
   var sp=mergeSLA(spCX,spOut);
-  var monthSlaData=sp.months&&sp.months[month];
-  var slaAgentsAll=(monthSlaData&&monthSlaData.agents)?Object.values(monthSlaData.agents):[];
+  var slaAgentsAll=aggregatePeriodSlaAgents_(sp,periodMonths);
   var teamRawGroups={}, teamDisplayGroups={};
   slaAgentsAll.forEach(function(a){
     var teamKey=(a.team==='Outsource')?'Outsource Team':'Internal Team';
@@ -1779,7 +1829,7 @@ function buildMonthReportHtml_(month){
 
   // ── MISTAKE REPORTS (from QA Error Diagnostics) ──
   var qaLogAll=(raw.qa&&raw.qa.length)?parseQALog(raw.qa):[];
-  var qaMonthEntries=qaLogAll.filter(function(e){return qaEntryMonth_(e.date)===month;});
+  var qaMonthEntries=qaLogAll.filter(function(e){return periodMonths.indexOf(qaEntryMonth_(e.date))>=0;});
   var QA_FIELD_MAP={no_reply:'noReply',no_sop:'notFollowSOP',late_reply:'lateReply',wrong_info:'wrongInfo',angry:'angry',no_solution:'noSolution',no_explanation:'noExplanation',verbal:'verbalWarning',warning_letter:'warningLetter'};
   var mistakeAgentMap={};
   qaMonthEntries.forEach(function(e){
@@ -1815,17 +1865,17 @@ function buildMonthReportHtml_(month){
   var mostCommonMistake=null;
   mistakeTypeCounts.forEach(function(m){ if(m.count>0&&(!mostCommonMistake||m.count>mostCommonMistake.count)) mostCommonMistake={type:m.label,count:m.count}; });
   var mistakeData={
-    summary:totalErrors>0?('A total of '+totalErrors+' QA error'+(totalErrors===1?'':'s')+' logged this month across '+mistakeTeams.length+' team(s).'):'No QA errors logged this month.',
+    summary:totalErrors>0?('A total of '+totalErrors+' QA error'+(totalErrors===1?'':'s')+' logged this period across '+mistakeTeams.length+' team(s).'):'No QA errors logged this period.',
     teams:mistakeTeams, teamTotals:mistakeTeamTotals, totalErrors:totalErrors,
     mostCommonMistake:mostCommonMistake, mistakeTypeCounts:mistakeTypeCounts,
     insights:{topMistakeAgents:topMistakeAgents}
   };
 
-  // ── Weekly remarks logged for this month (from the SLA Metrics page) ──
+  // ── Weekly remarks logged during this period (from the SLA Metrics page) ──
   var remarksForMonth=[];
   Object.keys(slaRemarksMap).forEach(function(k){
     var parts=k.split('||');
-    if(parts[2]===month&&slaRemarksMap[k].text){
+    if(periodMonths.indexOf(parts[2])>=0&&slaRemarksMap[k].text){
       remarksForMonth.push({team:parts[0],agent:parts[1],week:parts[3],text:slaRemarksMap[k].text});
     }
   });
@@ -1834,9 +1884,8 @@ function buildMonthReportHtml_(month){
   // "CS Detail" sheet's Status column (column S, matched by its "Status" header).
   // Only Active + Vacation count toward the current headcount; every other status
   // (Inactive, Leave, Terminated, Transfer to other department, Resigned) is
-  // excluded. Status is a live snapshot, so this reflects the roster as of export
-  // time. Grouping by team (not the Project/brand column) means the Outsource
-  // headcount always surfaces as its own line. ──
+  // excluded. Status is a live snapshot (not period-scoped), so this reflects
+  // the roster as of export time regardless of month/H1/H2 selection. ──
   var hcGroups={};
   Object.keys(AGENT_PROFILE_DATA||{}).forEach(function(k){
     var prof=AGENT_PROFILE_DATA[k];
@@ -1845,18 +1894,12 @@ function buildMonthReportHtml_(month){
     var isVacation=st.indexOf('vacation')>=0;
     var isActive=st.indexOf('active')>=0&&st.indexOf('inactive')<0;
     if(!isVacation&&!isActive) return; // Inactive / Leave / Terminated / Transfer / Resigned → not counted
-    // Group by team so "Outsource" is always its own line; fall back to the
-    // Project column, then "Unspecified", only if a team label is missing.
     var label=(prof.team||'').trim()||(prof.project||'').trim()||'Unspecified';
-    // Affiliate staff are flagged by "Aff" in the Project column (e.g. "Aff CS");
-    // everyone else on the team counts as CS. Only the ACTIVE count is split out
-    // (vacation stays as one combined number, matching the requested format).
     var isAff=/\baff/i.test(String(prof.project||''));
     if(!hcGroups[label]) hcGroups[label]={label:label,active:0,vacation:0,activeCs:0,activeAff:0};
     if(isVacation){ hcGroups[label].vacation++; }
     else { hcGroups[label].active++; if(isAff) hcGroups[label].activeAff++; else hcGroups[label].activeCs++; }
   });
-  // Order Outsource first, then Internal, then anything else.
   var hcOrder={Outsource:0,Internal:1};
   var headcountGroups=Object.values(hcGroups).sort(function(a,b){
     var oa=(hcOrder[a.label]!==undefined)?hcOrder[a.label]:9;
@@ -1873,30 +1916,43 @@ function buildMonthReportHtml_(month){
     internalTotal:internalGroup?(internalGroup.active+internalGroup.vacation):0
   };
 
-  // ── VOLUME — full-year monthly trend (agent vs bot) + month-over-month change ──
+  // ── VOLUME — full-year monthly trend (agent vs bot) + change vs the prior
+  // comparable period: prior month for a single month, H1 for an H2 export;
+  // H1 has no prior period yet within this year's data. ──
   var MO_ORDER=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var monthIdx=MO_ORDER.indexOf(month);
-  var prevMonth=monthIdx>0?MO_ORDER[monthIdx-1]:null;
   var vd=(raw.daily&&raw.daily.length)?deriveAutoFromDaily(raw.daily):{use:[],ag:[],bt:[],months:[]};
   var monthlyTrend=vd.use.map(function(r,i){return {month:r.month,agent:(vd.ag[i]?vd.ag[i].rowTotal:0),bot:(vd.bt[i]?vd.bt[i].rowTotal:0),total:r.rowTotal};});
-  var curIdxInVd=vd.use.findIndex(function(r){return r.month===month;});
-  var curAgentVol=curIdxInVd>=0?(vd.ag[curIdxInVd]?vd.ag[curIdxInVd].rowTotal:0):0;
-  var curBotVol=curIdxInVd>=0?(vd.bt[curIdxInVd]?vd.bt[curIdxInVd].rowTotal:0):0;
-  var curTotalVol=curIdxInVd>=0?vd.use[curIdxInVd].rowTotal:0;
-  var curAutoPct=curTotalVol>0?(curBotVol/curTotalVol*100):0;
-  var prevIdxInVd=prevMonth?vd.use.findIndex(function(r){return r.month===prevMonth;}):-1;
-  var prevAgentVol=prevIdxInVd>=0?(vd.ag[prevIdxInVd]?vd.ag[prevIdxInVd].rowTotal:0):0;
-  var prevBotVol=prevIdxInVd>=0?(vd.bt[prevIdxInVd]?vd.bt[prevIdxInVd].rowTotal:0):0;
-  var prevTotalVol=prevIdxInVd>=0?vd.use[prevIdxInVd].rowTotal:0;
-  var prevAutoPct=prevTotalVol>0?(prevBotVol/prevTotalVol*100):0;
+  function sumVolForMonths_(monthsArr){
+    var agent=0,bot=0,total=0;
+    monthsArr.forEach(function(m){
+      var idx=vd.use.findIndex(function(r){return r.month===m;});
+      if(idx<0) return;
+      agent+=(vd.ag[idx]?vd.ag[idx].rowTotal:0);
+      bot+=(vd.bt[idx]?vd.bt[idx].rowTotal:0);
+      total+=vd.use[idx].rowTotal;
+    });
+    return {agent:agent,bot:bot,total:total,autoPct:total>0?(bot/total*100):0};
+  }
+  var curVol=sumVolForMonths_(periodMonths);
+  var curTotalVol=curVol.total, curAgentVol=curVol.agent, curBotVol=curVol.bot, curAutoPct=curVol.autoPct;
+
+  var prevMonths=null, prevPeriodKey=null, prevLabel=null;
+  if(!isPeriod){
+    var monthIdx=MO_ORDER.indexOf(periodKey);
+    if(monthIdx>0){ prevPeriodKey=MO_ORDER[monthIdx-1]; prevMonths=[prevPeriodKey]; prevLabel=prevPeriodKey; }
+  } else if(periodKey==='H2'){
+    prevPeriodKey='H1'; prevMonths=H1_MONTHS; prevLabel='H1';
+  }
+
+  var prevVol=prevMonths?sumVolForMonths_(prevMonths):null;
   var volumeData={
     monthlyTrend:monthlyTrend,
     current:{total:curTotalVol,agent:curAgentVol,bot:curBotVol,autoPct:curAutoPct},
-    momTotalPct:(prevIdxInVd>=0&&prevTotalVol>0)?((curTotalVol-prevTotalVol)/prevTotalVol*100):null,
-    momAutoPtsChange:(prevIdxInVd>=0)?(curAutoPct-prevAutoPct):null
+    momTotalPct:(prevVol&&prevVol.total>0)?((curTotalVol-prevVol.total)/prevVol.total*100):null,
+    momAutoPtsChange:prevVol?(curAutoPct-prevVol.autoPct):null
   };
 
-  // ── TOP PERFORMERS — ranked by total chats this month, across both teams ──
+  // ── TOP PERFORMERS — ranked by total chats this period, across both teams ──
   var topPerformers=slaAgentsAll.filter(function(a){return a.chats>0;})
     .map(function(a){return {id:a.psdId||'-',name:a.name,team:(a.team==='Outsource'?'Outsource Team':'Internal Team'),totalChat:a.chats};})
     .sort(function(a,b){return b.totalChat-a.totalChat;}).slice(0,20);
@@ -1919,35 +1975,35 @@ function buildMonthReportHtml_(month){
     avgAht:av(speedAgents.map(function(a){return a.ahtSec;}))
   };
 
-  // ── KEY TAKEAWAYS — auto-generated month-over-month observations
-  // (deliberately NOT CSAT-focused; centers on volume, automation, QA trend) ──
+  // ── KEY TAKEAWAYS — auto-generated observations vs the prior comparable
+  // period (deliberately NOT CSAT-focused; centers on volume, automation, QA trend) ──
   var takeaways=[];
-  if(prevMonth&&prevIdxInVd>=0){
+  if(prevMonths){
     if(volumeData.momTotalPct!==null){
-      takeaways.push('Total chat volume '+(volumeData.momTotalPct>=0?'increased':'decreased')+' by '+Math.abs(volumeData.momTotalPct).toFixed(1)+'% vs '+prevMonth+' ('+fn(curTotalVol)+' vs '+fn(prevTotalVol)+').');
+      takeaways.push('Total chat volume '+(volumeData.momTotalPct>=0?'increased':'decreased')+' by '+Math.abs(volumeData.momTotalPct).toFixed(1)+'% vs '+prevLabel+' ('+fn(curTotalVol)+' vs '+fn(prevVol.total)+').');
     }
     if(volumeData.momAutoPtsChange!==null){
-      takeaways.push('Bot containment rate '+(volumeData.momAutoPtsChange>=0?'improved':'declined')+' by '+Math.abs(volumeData.momAutoPtsChange).toFixed(1)+' percentage point'+(Math.abs(volumeData.momAutoPtsChange)===1?'':'s')+' vs '+prevMonth+' ('+curAutoPct.toFixed(1)+'% vs '+prevAutoPct.toFixed(1)+'%).');
+      takeaways.push('Bot containment rate '+(volumeData.momAutoPtsChange>=0?'improved':'declined')+' by '+Math.abs(volumeData.momAutoPtsChange).toFixed(1)+' percentage point'+(Math.abs(volumeData.momAutoPtsChange)===1?'':'s')+' vs '+prevLabel+' ('+curAutoPct.toFixed(1)+'% vs '+prevVol.autoPct.toFixed(1)+'%).');
     }
-    var qaPrevCount=qaLogAll.filter(function(e){return qaEntryMonth_(e.date)===prevMonth;}).length;
-    takeaways.push('QA errors '+(totalErrors<=qaPrevCount?'improved or held steady':'increased')+' vs '+prevMonth+': '+totalErrors+' this month vs '+qaPrevCount+' last month.');
-    var prevMonthSlaData2=sp.months&&sp.months[prevMonth];
-    var prevSlaAgents=(prevMonthSlaData2&&prevMonthSlaData2.agents)?Object.values(prevMonthSlaData2.agents):[];
-    var prevAvgFrtAll=av(prevSlaAgents.map(function(a){return a.frt||0;}));
+    var qaPrevCount=qaLogAll.filter(function(e){return prevMonths.indexOf(qaEntryMonth_(e.date))>=0;}).length;
+    takeaways.push('QA errors '+(totalErrors<=qaPrevCount?'improved or held steady':'increased')+' vs '+prevLabel+': '+totalErrors+' this period vs '+qaPrevCount+' last period.');
+    var prevSlaAgents2=aggregatePeriodSlaAgents_(sp,prevMonths);
+    var prevAvgFrtAll=av(prevSlaAgents2.map(function(a){return a.frt||0;}));
     var curAvgFrtAll=av(slaAgentsAll.map(function(a){return a.frt||0;}));
     if(prevAvgFrtAll>0&&curAvgFrtAll>0){
-      takeaways.push('Average first response time '+(curAvgFrtAll<=prevAvgFrtAll?'improved to':'slowed to')+' '+ft(curAvgFrtAll)+' from '+ft(prevAvgFrtAll)+' in '+prevMonth+'.');
+      takeaways.push('Average first response time '+(curAvgFrtAll<=prevAvgFrtAll?'improved to':'slowed to')+' '+ft(curAvgFrtAll)+' from '+ft(prevAvgFrtAll)+' in '+prevLabel+'.');
     }
   } else {
-    takeaways.push('This is the earliest month with data on file — no prior month is available for a month-over-month comparison yet.');
+    takeaways.push(isPeriod?'This is the first half of the year on file \u2014 no prior period is available for a comparison yet.':'This is the earliest month with data on file \u2014 no prior month is available for a month-over-month comparison yet.');
   }
-  if(!takeaways.length) takeaways.push('Not enough data available yet to generate month-over-month takeaways.');
+  if(!takeaways.length) takeaways.push('Not enough data available yet to generate takeaways.');
 
-  // ── ATTENDANCE (Internal CS only — Outsource isn't tracked). Uses the same
-  // month-filter vocabulary ("Jan".."Dec") as the live Attendance page, so this
-  // reuses attAggregateForFilter_ / attFilterRemarks_ directly instead of
-  // re-deriving anything. Silently empty (not an error) for regions/months
-  // with no attendance sheet wired up yet. ──
+  // ── ATTENDANCE (Internal CS only — Outsource isn't tracked). attAggregateForFilter_
+  // / attFilterRemarks_ already understand the "Jan".."Dec"/"H1"/"H2" vocabulary
+  // directly, so periodKey is passed straight through unchanged. When there's
+  // no data, attendanceSummary below explains WHY instead of a bare blank
+  // section — sheet not configured, rows with no PSD-ID, dates that failed to
+  // parse (with a sample value), or genuinely no rows for this period. ──
   function attMonthTotals_(agents){
     var t=agents.reduce(function(acc,a){
       acc.daysPresent+=a.daysPresent; acc.daysInMonth+=a.daysInMonth; acc.daysOff+=a.daysOff;
@@ -1955,38 +2011,59 @@ function buildMonthReportHtml_(month){
       acc.earlyCount+=a.earlyCount; acc.earlyMinTotal+=a.earlyMinTotal;
       acc.extraBreakDays+=a.extraBreakDays; acc.extraBreakMinTotal+=a.extraBreakMinTotal;
       acc.workDurationMinTotal+=a.workDurationMinTotal;
+      acc.anomalyDays+=(a.anomalyDays||0);
       return acc;
-    },{daysPresent:0,daysInMonth:0,daysOff:0,lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,extraBreakDays:0,extraBreakMinTotal:0,workDurationMinTotal:0});
+    },{daysPresent:0,daysInMonth:0,daysOff:0,lateCount:0,lateMinTotal:0,earlyCount:0,earlyMinTotal:0,extraBreakDays:0,extraBreakMinTotal:0,workDurationMinTotal:0,anomalyDays:0});
     t.attendanceRate=t.daysInMonth>0?(t.daysPresent/t.daysInMonth):0;
     t.punctualityRate=t.daysPresent>0?((t.daysPresent-t.lateCount)/t.daysPresent):0;
     t.avgWorkDurationMin=t.daysPresent>0?(t.workDurationMinTotal/t.daysPresent):0;
     return t;
   }
-  var attMonthAgents=(attParsed&&attParsed.monthList&&attParsed.monthList.indexOf(month)>=0)?attAggregateForFilter_(attParsed,month):[];
-  var attRemarksMonth=(attParsed&&attParsed.remarks)?attFilterRemarks_(attParsed,month,'all'):[];
+  var attHasMonths=attParsed&&attParsed.monthList&&periodMonths.some(function(m){return attParsed.monthList.indexOf(m)>=0;});
+  var attMonthAgents=attHasMonths?attAggregateForFilter_(attParsed,periodKey):[];
+  var attRemarksMonth=(attParsed&&attParsed.remarks)?attFilterRemarks_(attParsed,periodKey,'all'):[];
   var attTotals=attMonthTotals_(attMonthAgents);
   var attTopLate=attMonthAgents.length?[...attMonthAgents].sort(function(a,b){return b.lateCount-a.lateCount;})[0]:null;
   var attTopExtraBreak=attMonthAgents.length?[...attMonthAgents].sort(function(a,b){return b.extraBreakDays-a.extraBreakDays;})[0]:null;
-  var attendanceSummary=attMonthAgents.length?
-    ('Internal CS attendance rate was '+(attTotals.attendanceRate*100).toFixed(0)+'% with a '+(attTotals.punctualityRate*100).toFixed(0)+'% punctuality rate across '+attMonthAgents.length+' agent(s) this month.'):
-    'No attendance data on file for this month.';
+  var attTopAnomaly=attMonthAgents.length?[...attMonthAgents].sort(function(a,b){return (b.anomalyDays||0)-(a.anomalyDays||0);})[0]:null;
+  var attendanceSummary;
+  if(attMonthAgents.length){
+    attendanceSummary='Internal CS attendance rate was '+(attTotals.attendanceRate*100).toFixed(0)+'% with a '+(attTotals.punctualityRate*100).toFixed(0)+'% punctuality rate across '+attMonthAgents.length+' agent(s) this period.';
+  } else if(!attParsed||!raw.attendance||!raw.attendance.length){
+    attendanceSummary='No attendance data on file for this period.';
+  } else if(attParsed.totalRowsSeen===0){
+    attendanceSummary='Attendance sheet loaded but no rows with a PSD-ID were found \u2014 check the sheet\'s column headers.';
+  } else if(!attParsed.monthList||!attParsed.monthList.length){
+    attendanceSummary='Attendance sheet has '+attParsed.totalRowsSeen+' row(s) but none of the dates could be parsed'+
+      ((attParsed.unparsedDateSamples&&attParsed.unparsedDateSamples[0])?(' (sample value: "'+attParsed.unparsedDateSamples[0]+'")'):'')+
+      ' \u2014 check the Date column format.';
+  } else {
+    attendanceSummary='No attendance data on file for '+monthLong+' \u2014 the sheet only has data for other months.';
+  }
   var attendanceData={
     summary:attendanceSummary,
-    agents:attMonthAgents.map(function(a){return {id:a.psdId,name:a.name,daysPresent:a.daysPresent,daysOff:a.daysOff,attendanceRate:a.attendanceRate,lateCount:a.lateCount,lateMinTotal:a.lateMinTotal,earlyCount:a.earlyCount,earlyMinTotal:a.earlyMinTotal,extraBreakDays:a.extraBreakDays,extraBreakMinTotal:a.extraBreakMinTotal,avgWorkDurationMin:a.avgWorkDurationMin};}),
+    agents:attMonthAgents.map(function(a){return {id:a.psdId,name:a.name,daysPresent:a.daysPresent,daysOff:a.daysOff,attendanceRate:a.attendanceRate,lateCount:a.lateCount,lateMinTotal:a.lateMinTotal,earlyCount:a.earlyCount,earlyMinTotal:a.earlyMinTotal,extraBreakDays:a.extraBreakDays,extraBreakMinTotal:a.extraBreakMinTotal,avgWorkDurationMin:a.avgWorkDurationMin,anomalyDays:a.anomalyDays||0,anomalyDayDetails:a.anomalyDayDetails||[]};}),
     totals:attTotals,
     remarks:attRemarksMonth.map(function(r){return {date:r.date,psdId:r.psdId,name:r.name,remark:r.remark};}),
     insights:{topLateAgent:attTopLate?{id:attTopLate.psdId,name:attTopLate.name,lateCount:attTopLate.lateCount,lateMinTotal:attTopLate.lateMinTotal}:null,
-              topExtraBreakAgent:(attTopExtraBreak&&attTopExtraBreak.extraBreakDays>0)?{id:attTopExtraBreak.psdId,name:attTopExtraBreak.name,extraBreakDays:attTopExtraBreak.extraBreakDays,extraBreakMinTotal:attTopExtraBreak.extraBreakMinTotal}:null}
+              topExtraBreakAgent:(attTopExtraBreak&&attTopExtraBreak.extraBreakDays>0)?{id:attTopExtraBreak.psdId,name:attTopExtraBreak.name,extraBreakDays:attTopExtraBreak.extraBreakDays,extraBreakMinTotal:attTopExtraBreak.extraBreakMinTotal}:null,
+              topAnomalyAgent:(attTopAnomaly&&attTopAnomaly.anomalyDays>0)?{id:attTopAnomaly.psdId,name:attTopAnomaly.name,anomalyDays:attTopAnomaly.anomalyDays}:null}
   };
-  // Month-over-month attendance takeaways — same spirit as the volume/QA ones above.
-  if(attMonthAgents.length&&prevMonth&&attParsed&&attParsed.monthList&&attParsed.monthList.indexOf(prevMonth)>=0){
-    var attPrevTotals=attMonthTotals_(attAggregateForFilter_(attParsed,prevMonth));
-    if(attPrevTotals.daysInMonth>0){
-      takeaways.push('Internal CS attendance rate '+(attTotals.attendanceRate>=attPrevTotals.attendanceRate?'improved to':'declined to')+' '+(attTotals.attendanceRate*100).toFixed(0)+'% from '+(attPrevTotals.attendanceRate*100).toFixed(0)+'% in '+prevMonth+'.');
+  // Attendance takeaway vs the prior comparable period.
+  if(attMonthAgents.length&&prevPeriodKey){
+    var attPrevAgents=attAggregateForFilter_(attParsed,prevPeriodKey);
+    if(attPrevAgents.length){
+      var attPrevTotals=attMonthTotals_(attPrevAgents);
+      if(attPrevTotals.daysInMonth>0){
+        takeaways.push('Internal CS attendance rate '+(attTotals.attendanceRate>=attPrevTotals.attendanceRate?'improved to':'declined to')+' '+(attTotals.attendanceRate*100).toFixed(0)+'% from '+(attPrevTotals.attendanceRate*100).toFixed(0)+'% in '+prevLabel+'.');
+      }
     }
   }
   if(attMonthAgents.length){
     takeaways.push('Attendance: '+attTotals.lateCount+' late check-in(s) totaling '+attFmtHM_(attTotals.lateMinTotal)+', '+attTotals.earlyCount+' early check-out(s) totaling '+attFmtHM_(attTotals.earlyMinTotal)+', and '+attTotals.extraBreakDays+' agent-day(s) with break time over the 90-minute allowance.'+(attTopLate&&attTopLate.lateCount>0?(' '+attTopLate.name+' had the most late check-ins ('+attTopLate.lateCount+').'):''));
+  }
+  if(attTotals.anomalyDays>0){
+    takeaways.push('⚠️ '+attTotals.anomalyDays+' agent-day(s) had a duplicate check-in (2+ punches logged the same day)'+(attTopAnomaly&&attTopAnomaly.anomalyDays>0?(', most on '+attTopAnomaly.name+' ('+attTopAnomaly.anomalyDays+').'):'.')+' Still counted as present — flagged for manual review.');
   }
 
   var DATA_OBJ={
@@ -2509,6 +2586,38 @@ function mergeSLA(a,b){
   };
 }
 
+// Merges every agent's SLA row across a set of months ("H1"/"H2" export, or a
+// single-item array for a normal month) into ONE row per agent: chats sum,
+// FRT/MRT/AHT/CSAT are chat-weighted averages so a month with more volume
+// counts proportionally more toward the period average (a straight average
+// would let a slow-but-quiet month skew the period figure).
+function aggregatePeriodSlaAgents_(sp, monthsArr){
+  var byKey={};
+  (monthsArr||[]).forEach(function(m){
+    var md=sp.months&&sp.months[m];
+    if(!md||!md.agents) return;
+    Object.values(md.agents).forEach(function(a){
+      var key=(a.team||'')+'||'+(a.psdId||a.name||'');
+      if(!byKey[key]){
+        byKey[key]={team:a.team,psdId:a.psdId,name:a.name,chats:0,frtW:0,mrtW:0,ahtW:0,csatW:0,w:0};
+      }
+      var acc=byKey[key];
+      var wt=a.chats||0;
+      acc.chats+=wt;
+      acc.frtW+=(a.frt||0)*wt; acc.mrtW+=(a.mrt||0)*wt; acc.ahtW+=(a.aht||0)*wt; acc.csatW+=(a.csat||0)*wt;
+      acc.w+=wt;
+      if(a.name&&a.name.length>(acc.name||'').length) acc.name=a.name;
+    });
+  });
+  return Object.values(byKey).map(function(acc){
+    var w=acc.w||0;
+    return {
+      team:acc.team, psdId:acc.psdId, name:acc.name, chats:acc.chats,
+      frt:w>0?(acc.frtW/w):0, mrt:w>0?(acc.mrtW/w):0, aht:w>0?(acc.ahtW/w):0, csat:w>0?(acc.csatW/w):0
+    };
+  });
+}
+
 function getSLAMonth(parsed, month){
   var agents=(parsed.months[month]&&Object.values(parsed.months[month].agents))||[];
   return{
@@ -2621,13 +2730,50 @@ function attIsLate_(s){ return /^late\b/i.test(String(s||'').trim()); }
 function attIsEarly_(s){ return /^early\b/i.test(String(s||'').trim()); }
 function attParseMin_(s){ var m=String(s||'').match(/(\d+)\s*min/i); return m?parseInt(m[1],10):0; }
 
+// Flexible date -> "Jan".."Dec" parser for the Attendance sheet specifically.
+// The main dashboard's qaEntryMonth_() only recognizes a 3-letter month NAME
+// somewhere in the string (e.g. "9-Dec", "December 9, 2026"). The Attendance
+// sheet is a separate Google Sheet file and may format its Date column
+// differently (numeric "9/12/2026", ISO "2026-12-09", or a raw Sheets serial
+// number if the API returns unformatted values) — any of which would make
+// every single row silently fail to match and produce an empty report with
+// no error. This tries several formats before giving up on a row.
+var ATT_MO_ABBR=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function attParseDateFlexible_(s){
+  var str=String(s===undefined||s===null?'':s).trim();
+  if(!str) return null;
+  var byName=qaEntryMonth_(str);
+  if(byName) return {month:byName};
+  var iso=str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(iso){
+    var mi=parseInt(iso[2],10);
+    if(mi>=1&&mi<=12) return {month:ATT_MO_ABBR[mi-1]};
+  }
+  var slash=str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(slash){
+    var a=parseInt(slash[1],10), b=parseInt(slash[2],10), mIdx=null;
+    if(a>12&&b>=1&&b<=12) mIdx=b;
+    else if(b>12&&a>=1&&a<=12) mIdx=a;
+    else if(b>=1&&b<=12) mIdx=b;
+    if(mIdx) return {month:ATT_MO_ABBR[mIdx-1]};
+  }
+  if(/^\d{4,6}(\.\d+)?$/.test(str)){
+    var serial=parseFloat(str);
+    if(serial>20000&&serial<80000){
+      var dt=new Date(Date.UTC(1899,11,30)+Math.round(serial)*86400000);
+      return {month:ATT_MO_ABBR[dt.getUTCMonth()]};
+    }
+  }
+  return null;
+}
+
 function parseAttendance(rows){
-  var out={ byAgentMonth:{}, monthList:[], rowsRaw:[], remarks:[], anomalies:[] };
+  var out={ byAgentMonth:{}, monthList:[], rowsRaw:[], remarks:[], anomalies:[], totalRowsSeen:0, unparsedDateSamples:[] };
   if(!rows||!rows.length) return out;
   var hdrIdx=-1,hdr=null;
   for(var i=0;i<Math.min(rows.length,5);i++){
     var r=rows[i]||[];
-    if(r.some(function(c){return /^psd(\s*id)?$/i.test(String(c||'').trim());})){hdrIdx=i;hdr=r;break;}
+    if(r.some(function(c){return /psd(\s*[-_]?\s*id)?/i.test(String(c||'').trim());})){hdrIdx=i;hdr=r;break;}
   }
   if(hdrIdx<0) return out;
 
@@ -2635,8 +2781,8 @@ function parseAttendance(rows){
   hdr.forEach(function(c,i){
     var h=String(c||'').trim().toLowerCase();
     if(!h) return;
-    if(col.date===undefined&&/^date$/.test(h)) col.date=i;
-    else if(col.psd===undefined&&/^psd/.test(h)) col.psd=i;
+    if(col.date===undefined&&/date/.test(h)) col.date=i;
+    else if(col.psd===undefined&&/psd/.test(h)) col.psd=i;
     else if(col.name===undefined&&/employee|name/.test(h)) col.name=i;
     else if(col.project===undefined&&/project/.test(h)) col.project=i;
     else if(col.shift===undefined&&/shift/.test(h)) col.shift=i;
@@ -2660,9 +2806,14 @@ function parseAttendance(rows){
     var row=rows[r2]||[];
     var psd=String(row[col.psd]||'').trim();
     if(!psd) continue;
+    out.totalRowsSeen++;
     var dateStr=col.date!==undefined?String(row[col.date]||'').trim():'';
-    var mo=qaEntryMonth_(dateStr);
-    if(!mo) continue;
+    var parsedDate=attParseDateFlexible_(dateStr);
+    if(!parsedDate){
+      if(dateStr&&out.unparsedDateSamples.length<5) out.unparsedDateSamples.push(dateStr);
+      continue;
+    }
+    var mo=parsedDate.month;
     var dMatch=dateStr.match(/(\d{1,2})/);
     var day=dMatch?parseInt(dMatch[1],10):0;
 
@@ -2720,11 +2871,11 @@ function parseAttendance(rows){
         shortBreakCountTotal:0, shortBreakMinTotal:0,
         specialBreakCountTotal:0, specialBreakMinTotal:0,
         workDurationMinTotal:0, totalBreakMinTotal:0, breakCountTotal:0,
+        anomalyDays:0, anomalyDayDetails:[],
         days:[]
       };
     }
     var agg=out.byAgentMonth[key];
-    agg.daysPresent++;
     if(name&&name.length>agg.name.length) agg.name=name; // prefer the more complete spelling if it varies
     if(isLate){ agg.lateCount++; agg.lateMinTotal+=lateMin; }
     if(isEarly){ agg.earlyCount++; agg.earlyMinTotal+=earlyMin; }
@@ -2740,14 +2891,39 @@ function parseAttendance(rows){
     monthsSeen[mo]=true;
   }
 
-  // Derived per-agent-month rates, now that daysPresent/lateCount/etc are final.
+  // Derived per-agent-month rates, now that lateCount/etc are final. Days
+  // Present is computed here from UNIQUE calendar days in agg.days rather
+  // than one increment per row above — if the same PSD-ID has two check-in
+  // rows on the same date (a duplicate punch, or a data-entry mistake), that
+  // day still only counts once toward attendance, and the extra row(s) are
+  // instead surfaced as a "Duplicate Check-In" anomaly for manual review.
+  out.duplicateCheckins=[];
   Object.values(out.byAgentMonth).forEach(function(agg){
+    var byDay={};
+    agg.days.forEach(function(e){
+      if(!byDay[e.day]) byDay[e.day]={day:e.day,date:e.date,count:0};
+      byDay[e.day].count++;
+    });
+    var dayKeys=Object.keys(byDay);
+    agg.daysPresent=dayKeys.length;
+    var dupDays=dayKeys.map(function(d){return byDay[d];}).filter(function(d){return d.count>=2;})
+      .sort(function(a,b){return a.day-b.day;});
+    agg.anomalyDays=dupDays.length;
+    agg.anomalyDayDetails=dupDays;
+    dupDays.forEach(function(d){
+      out.duplicateCheckins.push({date:d.date,month:agg.month,day:d.day,psdId:agg.psdId,name:agg.name,count:d.count});
+    });
+
     var daysInMonth=ATT_MO_DAYS_2026[ATT_MO_IDX[agg.month]]||30;
     agg.daysInMonth=daysInMonth;
     agg.daysOff=Math.max(0,daysInMonth-agg.daysPresent);
     agg.attendanceRate=daysInMonth>0?(agg.daysPresent/daysInMonth):0;
     agg.punctualityRate=agg.daysPresent>0?((agg.daysPresent-agg.lateCount)/agg.daysPresent):0;
     agg.avgWorkDurationMin=agg.daysPresent>0?(agg.workDurationMinTotal/agg.daysPresent):0;
+  });
+  out.duplicateCheckins.sort(function(a,b){
+    var ka=(ATT_MO_IDX[a.month]||0)*100+(a.day||0), kb=(ATT_MO_IDX[b.month]||0)*100+(b.day||0);
+    return kb-ka;
   });
 
   out.monthList=ATT_MO_ORDER.filter(function(m){return monthsSeen[m];});
@@ -2776,7 +2952,8 @@ function attAggregateForFilter_(attData,monthFilter){
         extraBreakDays:0,extraBreakMinTotal:0,
         shortBreakCountTotal:0,shortBreakMinTotal:0,
         specialBreakCountTotal:0,specialBreakMinTotal:0,
-        workDurationMinTotal:0,totalBreakMinTotal:0,breakCountTotal:0
+        workDurationMinTotal:0,totalBreakMinTotal:0,breakCountTotal:0,
+        anomalyDays:0,anomalyDayDetails:[]
       };
     }
     var a=byPsd[key];
@@ -2791,6 +2968,10 @@ function attAggregateForFilter_(attData,monthFilter){
     a.specialBreakCountTotal+=agg.specialBreakCountTotal; a.specialBreakMinTotal+=agg.specialBreakMinTotal;
     a.workDurationMinTotal+=agg.workDurationMinTotal; a.totalBreakMinTotal+=agg.totalBreakMinTotal;
     a.breakCountTotal+=agg.breakCountTotal;
+    a.anomalyDays+=(agg.anomalyDays||0);
+    if(agg.anomalyDayDetails&&agg.anomalyDayDetails.length){
+      a.anomalyDayDetails=a.anomalyDayDetails.concat(agg.anomalyDayDetails.map(function(d){return Object.assign({month:agg.month},d);}));
+    }
   });
   var list=Object.values(byPsd).map(function(a){
     a.attendanceRate=a.daysInMonth>0?(a.daysPresent/a.daysInMonth):0;
@@ -4504,9 +4685,11 @@ function attFmtMin_(m){ return m>=60?((m/60).toFixed(1)+'h'):(Math.round(m)+'m')
 // switching to a bare "Xm" shorthand under an hour or rounding to 1 decimal.
 function attFmtHM_(totalMin){
   if(totalMin===undefined||totalMin===null||isNaN(totalMin)||totalMin<0) return '—';
-  var h=Math.floor(totalMin/60);
-  var m=Math.round(totalMin-h*60);
-  if(m>=60){ h+=1; m-=60; }
+  var t=Math.round(totalMin);
+  if(t<60) return t+'min';
+  var h=Math.floor(t/60);
+  var m=t-h*60;
+  if(m===0) return h+'h';
   return h+'.'+(m<10?'0'+m:m)+'h';
 }
 function attFmtPct_(f){ return (f*100).toFixed(0)+'%'; }
@@ -4547,7 +4730,21 @@ function renderAttendance(){
   var emptyEl=document.getElementById('att-empty');
   var bodyEl=document.getElementById('att-body');
   if(!attParsed||!attParsed.monthList||!attParsed.monthList.length){
-    if(emptyEl) emptyEl.style.display='block';
+    if(emptyEl){
+      emptyEl.style.display='block';
+      // Distinguish "nothing configured/fetched" from "fetched rows but the
+      // Date column couldn't be parsed" instead of always showing the same
+      // generic message — this is the #1 cause of a silently-empty page.
+      var msg='No attendance data loaded for this region yet -- check REGION_CONFIG\'s attendanceSheetId.';
+      if(attParsed&&attParsed.totalRowsSeen===0&&raw.attendance&&raw.attendance.length){
+        msg='Attendance sheet loaded but no rows with a PSD-ID were found — check the sheet\'s column headers.';
+      } else if(attParsed&&attParsed.totalRowsSeen>0&&attParsed.monthList.length===0){
+        msg='Attendance sheet has '+attParsed.totalRowsSeen+' row(s) but none of the dates could be parsed'+
+          ((attParsed.unparsedDateSamples&&attParsed.unparsedDateSamples[0])?(' (sample value: "'+attParsed.unparsedDateSamples[0]+'")'):'')+
+          '. Check the Date column format.';
+      }
+      emptyEl.textContent=msg;
+    }
     if(bodyEl) bodyEl.style.display='none';
     return;
   }
@@ -4566,13 +4763,14 @@ function renderAttendance(){
 
   // Team-wide KPI cards
   var totalPresent=0,totalInMonth=0,totalLateCnt=0,totalLateMin=0,totalEarlyCnt=0,totalEarlyMin=0;
-  var totalExtraDays=0,totalExtraMin=0,totalWorkMin=0,totalOff=0;
+  var totalExtraDays=0,totalExtraMin=0,totalWorkMin=0,totalOff=0,totalAnomalyDays=0;
   list.forEach(function(a){
     totalPresent+=a.daysPresent; totalInMonth+=a.daysInMonth; totalOff+=a.daysOff;
     totalLateCnt+=a.lateCount; totalLateMin+=a.lateMinTotal;
     totalEarlyCnt+=a.earlyCount; totalEarlyMin+=a.earlyMinTotal;
     totalExtraDays+=a.extraBreakDays; totalExtraMin+=a.extraBreakMinTotal;
     totalWorkMin+=a.workDurationMinTotal;
+    totalAnomalyDays+=(a.anomalyDays||0);
   });
   var attRate=totalInMonth>0?(totalPresent/totalInMonth):0;
   var puncRate=totalPresent>0?((totalPresent-totalLateCnt)/totalPresent):0;
@@ -4588,6 +4786,7 @@ function renderAttendance(){
   setText_('att-early-d',attFmtHM_(totalEarlyMin)+' total');
   setText_('att-extra',totalExtraDays);
   setText_('att-extra-d',attFmtHM_(totalExtraMin)+' total over allowance');
+  setText_('att-anomaly',totalAnomalyDays);
 
   renderAttendanceTable();
   renderAttendanceDailyPanel();
@@ -4620,17 +4819,123 @@ function renderAttendanceTable(){
     return 0;
   });
   tbody.innerHTML=list.map(function(a){
+    var anomalyN=a.anomalyDays||0;
+    var pid=normPsd_(a.psdId);
     return '<tr>'+
       '<td>'+a.psdId+'</td><td>'+a.name+'</td>'+
       '<td>'+a.daysPresent+'</td><td>'+a.daysOff+'</td><td>'+attFmtPct_(a.attendanceRate)+'</td>'+
-      '<td>'+a.lateCount+'</td><td>'+attFmtHM_(a.lateMinTotal)+'</td>'+
-      '<td>'+a.earlyCount+'</td><td>'+attFmtHM_(a.earlyMinTotal)+'</td>'+
-      '<td'+(a.extraBreakDays>0?' style="color:var(--red);font-weight:700"':'')+'>'+a.extraBreakDays+'</td>'+
+      '<td'+(a.lateCount>0?' style="color:var(--amber);font-weight:700;cursor:pointer" onclick="openAttendanceEventModal(\''+pid+'\',\'late\')"':'')+'>'+a.lateCount+'</td><td>'+attFmtHM_(a.lateMinTotal)+'</td>'+
+      '<td'+(a.earlyCount>0?' style="color:var(--red);font-weight:700;cursor:pointer" onclick="openAttendanceEventModal(\''+pid+'\',\'early\')"':'')+'>'+a.earlyCount+'</td><td>'+attFmtHM_(a.earlyMinTotal)+'</td>'+
+      '<td'+(a.extraBreakDays>0?' style="color:var(--red);font-weight:700;cursor:pointer" onclick="openAttendanceEventModal(\''+pid+'\',\'extra\')"':'')+'>'+a.extraBreakDays+'</td>'+
       '<td'+(a.extraBreakMinTotal>0?' style="color:var(--red)"':'')+'>'+attFmtHM_(a.extraBreakMinTotal)+'</td>'+
       '<td>'+a.shortBreakCountTotal+'</td><td>'+attFmtHM_(a.avgWorkDurationMin)+'</td>'+
-      '<td'+(a.remarkCount>0?' style="color:var(--amber);font-weight:700;cursor:pointer" onclick="document.getElementById(\'att-agent\').value=\''+normPsd_(a.psdId)+'\';applyAttendanceFilters();document.getElementById(\'att-daily-tbl\').scrollIntoView({behavior:\'smooth\',block:\'center\'})"':'')+'>'+(a.remarkCount>0?('📝 '+a.remarkCount):'—')+'</td>'+
+      '<td'+(anomalyN>0?' style="color:var(--red);font-weight:700;cursor:pointer" onclick="openAnomalyModal(\''+pid+'\')"':'')+'>'+(anomalyN>0?('⚠️ '+anomalyN):'—')+'</td>'+
+      '<td'+(a.remarkCount>0?' style="color:var(--amber);font-weight:700;cursor:pointer" onclick="openRemarksModal(\''+pid+'\')"':'')+'>'+(a.remarkCount>0?('📝 '+a.remarkCount):'—')+'</td>'+
     '</tr>';
-  }).join('') || '<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">No matching agents</td></tr>';
+  }).join('') || '<tr><td colspan="15" style="text-align:center;color:var(--muted);padding:20px">No matching agents</td></tr>';
+}
+
+// Shared small "detail popup" for the Attendance table's ⚠️ Anomaly and
+// 📝 Remarks columns — click a cell to see that agent's list without
+// leaving the table (replaces the old browser title= tooltip / jump-to-panel
+// behavior). opts: {icon, tone:'red'|'amber', title, sub, rowsHtml, footText}
+function openDetailModal(opts){
+  var overlay=document.getElementById('detail-overlay');
+  var box=document.getElementById('detail-box');
+  var iconEl=document.getElementById('detail-icon');
+  var titleEl=document.getElementById('detail-title-text');
+  var subEl=document.getElementById('detail-sub-text');
+  var bodyEl=document.getElementById('detail-body');
+  var footEl=document.getElementById('detail-foot-text');
+  if(!overlay||!bodyEl) return;
+  if(box) box.className='detail-box'+(opts.tone?(' tone-'+opts.tone):'');
+  if(iconEl) iconEl.textContent=opts.icon||'';
+  if(titleEl) titleEl.textContent=opts.title||'';
+  if(subEl) subEl.textContent=opts.sub||'';
+  bodyEl.innerHTML=opts.rowsHtml||'<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">No details available</div>';
+  if(footEl) footEl.textContent=opts.footText||'';
+  overlay.classList.add('open');
+}
+function closeDetailModal(){
+  var overlay=document.getElementById('detail-overlay');
+  if(overlay) overlay.classList.remove('open');
+}
+
+// Anomaly detail popup — every duplicate-check-in date + how many punches
+// were logged that day for the clicked agent, within the current filter.
+function openAnomalyModal(psdKey){
+  var key=normPsd_(psdKey);
+  var a=attCurrentList.find(function(x){return normPsd_(x.psdId)===key;});
+  if(!a) return;
+  var details=(a.anomalyDayDetails||[]).slice().sort(function(x,y){
+    return ((ATT_MO_IDX[x.month]||0)*100+(x.day||0))-((ATT_MO_IDX[y.month]||0)*100+(y.day||0));
+  });
+  var rowsHtml=details.map(function(d){
+    return '<div class="detail-row"><span class="detail-date">'+d.date+(d.month?(' ('+d.month+')'):'')+'</span><span class="detail-badge red">'+d.count+'x punches</span></div>';
+  }).join('');
+  openDetailModal({
+    icon:'⚠️', tone:'red',
+    title:'Duplicate Check-In \u2014 '+a.name,
+    sub:a.psdId+' \u00b7 '+(a.anomalyDays||0)+' day(s) flagged',
+    rowsHtml:rowsHtml,
+    footText:'Duplicate check-ins still count as present \u2014 flagged here for manual review only.'
+  });
+}
+
+// Remarks detail popup — every exception remark (Column Q on the Attendance
+// sheet) logged for the clicked agent, within the current filter.
+function openRemarksModal(psdKey){
+  var key=normPsd_(psdKey);
+  var a=attCurrentList.find(function(x){return normPsd_(x.psdId)===key;});
+  if(!a) return;
+  var rows=attCurrentRemarks.filter(function(r){return normPsd_(r.psdId)===key;}).slice().sort(function(x,y){
+    return ((ATT_MO_IDX[x.month]||0)*100+(x.day||0))-((ATT_MO_IDX[y.month]||0)*100+(y.day||0));
+  });
+  var rowsHtml=rows.map(function(r){
+    return '<div class="detail-row"><span class="detail-date">'+r.date+'</span><span class="detail-note">'+r.remark+'</span></div>';
+  }).join('');
+  openDetailModal({
+    icon:'📝', tone:'amber',
+    title:'Attendance Remarks \u2014 '+a.name,
+    sub:a.psdId+' \u00b7 '+rows.length+' remark(s)',
+    rowsHtml:rowsHtml,
+    footText:'From the Remark column on the Attendance sheet.'
+  });
+}
+
+// Late / Early-Out / Extra-Break detail popup — every raw day-row (from
+// attParsed.rowsRaw) matching the clicked event type, for that agent, within
+// the currently selected month/H1/H2 filter. Same click-to-see-dates pattern
+// as the Anomaly and Remarks popups above.
+var ATT_EVENT_CFG_={
+  late:{icon:'⏰',tone:'amber',label:'Late Check-In',badgeCls:'amber',match:function(r){return r.isLate;},val:function(r){return r.lateRaw||'Late';}},
+  early:{icon:'🚪',tone:'red',label:'Early Check-Out',badgeCls:'red',match:function(r){return r.isEarly;},val:function(r){return r.earlyRaw||'Early';}},
+  extra:{icon:'☕',tone:'red',label:'Extra Break (>90min)',badgeCls:'red',match:function(r){return r.isExtraBreakDay;},val:function(r){return '+'+attFmtHM_(r.extraBreakMin)+' over ('+attFmtHM_(r.totalBreakMin)+' total)';}}
+};
+function openAttendanceEventModal(psdKey,kind){
+  var cfg=ATT_EVENT_CFG_[kind];
+  if(!cfg) return;
+  var key=normPsd_(psdKey);
+  var a=attCurrentList.find(function(x){return normPsd_(x.psdId)===key;});
+  if(!a) return;
+  var months=expandMonths(attMonthFilter);
+  var rows=(attParsed.rowsRaw||[]).filter(function(r){
+    if(normPsd_(r.psdId)!==key) return false;
+    if(months&&months.indexOf(r.month)<0) return false;
+    return cfg.match(r);
+  }).sort(function(x,y){
+    return ((ATT_MO_IDX[x.month]||0)*100+(x.day||0))-((ATT_MO_IDX[y.month]||0)*100+(y.day||0));
+  });
+  var rowsHtml=rows.map(function(r){
+    return '<div class="detail-row"><span class="detail-date">'+r.date+'</span><span class="detail-badge '+cfg.badgeCls+'">'+cfg.val(r)+'</span></div>';
+  }).join('');
+  openDetailModal({
+    icon:cfg.icon, tone:cfg.tone,
+    title:cfg.label+' \u2014 '+a.name,
+    sub:a.psdId+' \u00b7 '+rows.length+' day(s)',
+    rowsHtml:rowsHtml,
+    footText:'From the Attendance sheet, within the current month/H1/H2 filter.'
+  });
 }
 
 // Daily Records panel -- raw per-day Check In/Out (+ Late/Early/Work/Break/Remark)
@@ -4663,9 +4968,15 @@ function renderAttendanceDailyPanel(){
   });
 
   if(countEl) countEl.textContent=days.length+(days.length===1?' day':' days');
+  // Flag rows sharing the same calendar day (duplicate punches) so they're
+  // visible right where the raw rows are, without a separate popup.
+  var dayCounts={};
+  days.forEach(function(d){ var k=d.month+'-'+d.day; dayCounts[k]=(dayCounts[k]||0)+1; });
   tbody.innerHTML=days.map(function(d){
-    return '<tr>'+
-      '<td style="white-space:nowrap">'+d.date+'</td>'+
+    var dupN=dayCounts[d.month+'-'+d.day]||1;
+    var isDup=dupN>=2;
+    return '<tr'+(isDup?' style="background:rgba(255,64,129,0.08)"':'')+'>'+
+      '<td style="white-space:nowrap">'+d.date+(isDup?' <span style="color:var(--red);font-weight:700" title="Duplicate check-in: '+dupN+' rows this day">⚠️ x'+dupN+'</span>':'')+'</td>'+
       '<td style="white-space:nowrap">'+(d.shift||'—')+'</td>'+
       '<td style="white-space:nowrap">'+(d.checkIn||'—')+'</td>'+
       '<td style="white-space:nowrap'+(d.isLate?';color:var(--amber);font-weight:700':'')+'">'+(d.lateRaw||'—')+'</td>'+
@@ -6075,7 +6386,7 @@ function closeZoomModal(){
 }
 
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){ closeZoomModal(); closeAgentProfileModal(); }
+  if(e.key==='Escape'){ closeZoomModal(); closeAgentProfileModal(); closeDetailModal(); }
 });
 // ── END ZOOM MODAL ──────────────────────────────────────────────────────
 
