@@ -5501,7 +5501,7 @@ function renderSchedule(){
   subHtml+='<th class="sched-sum-first">&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>';
 
   var bodyHtml=agents.map(function(a){
-    var profile=AGENT_PROFILE_DATA?(AGENT_PROFILE_DATA[a.key]||AGENT_PROFILE_DATA[a.name.trim().toUpperCase()]):null;
+    var profile=findAgentProfile_(a.key,a.name);
     var position=(profile&&profile.position)?profile.position:'—';
     var row='<tr><td class="sched-col-name" title="'+a.name+'">'+a.name+'</td>'+
       '<td class="sched-col-psd">'+a.psdId+'</td>'+
@@ -5573,7 +5573,7 @@ function buildScheduleReportHtml_(){
   headRow2+='<th class="sum"></th><th class="sum"></th><th class="sum"></th>';
 
   var gridRows=agents.map(function(a){
-    var profile=AGENT_PROFILE_DATA?(AGENT_PROFILE_DATA[a.key]||AGENT_PROFILE_DATA[a.name.trim().toUpperCase()]):null;
+    var profile=findAgentProfile_(a.key,a.name);
     var position=(profile&&profile.position)?profile.position:'—';
     var row='<tr><td class="nm nm-agent">'+esc(a.name)+'</td><td class="nm nm-psd">'+esc(a.psdId)+'</td><td class="nm nm-pos">'+esc(position)+'</td>';
     var dayCount=0,nightCount=0,offCount=0;
@@ -5600,7 +5600,7 @@ function buildScheduleReportHtml_(){
 
   var statRows=agents.map(function(a){
     var s=statsByKey[a.key];
-    var profile=AGENT_PROFILE_DATA?(AGENT_PROFILE_DATA[a.key]||AGENT_PROFILE_DATA[a.name.trim().toUpperCase()]):null;
+    var profile=findAgentProfile_(a.key,a.name);
     var position=(profile&&profile.position)?profile.position:'—';
     if(!s){
       return '<tr><td class="nm-agent">'+esc(a.name)+'</td><td>'+esc(a.psdId)+'</td><td>'+esc(position)+'</td>'+
@@ -6535,6 +6535,31 @@ function apDoAvatarUpload_(file,token){
 // person) — strips everything but letters/digits, then uppercases.
 function normPsd_(s){
   return String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+
+// Looks an agent up in AGENT_PROFILE_DATA (the "CS Detail" sheet) by PSD-ID
+// key first, then exact-uppercase name, then falls back to the same loose
+// word-set name match the Agent Audit Profile already uses elsewhere in this
+// file (normNameLoose_) — needed because the Attendance sheet (which is what
+// drives the Schedule page's roster) doesn't always spell a PSD-ID or name
+// identically to CS Detail (missing PSD-ID, word order swapped, a nickname in
+// parentheses, etc). Without this last step, agents affected by that
+// mismatch silently show "—" for Position on the Schedule page even though
+// CS Detail clearly has their Position filled in.
+function findAgentProfile_(key,name){
+  if(!AGENT_PROFILE_DATA) return null;
+  if(AGENT_PROFILE_DATA[key]) return AGENT_PROFILE_DATA[key];
+  var upName=(name||'').trim().toUpperCase();
+  if(upName&&AGENT_PROFILE_DATA[upName]) return AGENT_PROFILE_DATA[upName];
+  var loose=normNameLoose_(name);
+  if(!loose) return null;
+  var found=null;
+  Object.keys(AGENT_PROFILE_DATA).some(function(k){
+    var p=AGENT_PROFILE_DATA[k];
+    if(p&&p.name&&normNameLoose_(p.name)===loose){ found=p; return true; }
+    return false;
+  });
+  return found;
 }
 
 // Loose name comparison for matching the same person across sheets that don't
