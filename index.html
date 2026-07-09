@@ -5421,8 +5421,19 @@ function schedBuildData_(){
     var d=dir[k];
     if(d.team!=='Internal') return; // Outsource attendance isn't tracked, same as the Attendance page
     var profile=AGENT_PROFILE_DATA[k]||AGENT_PROFILE_DATA[d.name.trim().toUpperCase()];
-    var st=(profile&&profile.status?profile.status:'').trim().toLowerCase();
-    if(st.indexOf('resign')>=0) return; // left the company — don't keep showing them
+    var dep=parseAgentDepartureStatus_(profile&&profile.status);
+    if(dep.isDeparted){
+      if(dep.cutoffMonth&&dep.cutoffYear){
+        if(dep.cutoffYear<2026) return; // left before this year even started
+        if(dep.cutoffYear===2026&&ATT_MO_IDX[schedMonthFilter]>ATT_MO_IDX[dep.cutoffMonth]) return; // past the month they left — drop them
+        // cutoffYear>2026: hasn't reached their leave date yet within this calendar, keep showing
+      } else {
+        // Left, but CS Detail has no date written down — don't blanket-show
+        // every month; only the safety net below (real attendance data) will
+        // bring them back, and only for months they actually worked.
+        return;
+      }
+    }
     agentsByKey[k]={psdId:d.psdId,name:d.name,key:k};
   });
   // Safety net: also pick up anyone who has an attendance row this month but,
@@ -6715,6 +6726,27 @@ function parseAgentProfileSheet(rows){
 // directory's headcount matching exactly what's maintained in CS Detail, instead
 // of drifting upward whenever someone shows up in a past month's SLA sheet but
 // isn't (or is no longer) a row in CS Detail.
+// Parses CS Detail's Status cell, which packs a status WORD and (for anyone
+// who has left) an effective DATE into the same cell — e.g. "Resigned March
+// 04, 2026" or "Terminated effective April 27, 2026". Used by Schedule to
+// decide, month by month, whether someone who has left should still appear
+// (they should, up through the month they left) or not (every month after).
+// Active / Vacation / Leave are NOT departures — those keep showing every
+// month exactly like today. Only Resigned / Terminated / Inactive / Transfer
+// count as "left the seat".
+var SCHED_DEPARTED_STATUS_KEYWORDS_=['resign','terminat','inactive','transfer'];
+var SCHED_MONTH_NAMES_=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function parseAgentDepartureStatus_(statusRaw){
+  var s=String(statusRaw||'').trim();
+  var low=s.toLowerCase();
+  var isDeparted=SCHED_DEPARTED_STATUS_KEYWORDS_.some(function(kw){return low.indexOf(kw)>=0;});
+  if(!isDeparted) return {isDeparted:false,cutoffMonth:null,cutoffYear:null};
+  var m=s.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s*(\d{4})/i);
+  if(!m) return {isDeparted:true,cutoffMonth:null,cutoffYear:null}; // departed, but no date written down
+  var idx=SCHED_MONTH_NAMES_.findIndex(function(x){return x.toLowerCase()===m[1].toLowerCase();});
+  return {isDeparted:true,cutoffMonth:idx>=0?ATT_MO_ABBR[idx]:null,cutoffYear:parseInt(m[3],10)};
+}
+
 function buildAgentDirectory(){
   var dir={};
   Object.keys(AGENT_PROFILE_DATA).forEach(function(rawKey){
