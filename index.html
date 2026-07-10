@@ -1239,19 +1239,27 @@ var REGION_CONFIG={
       issueDay:'Issue Day!A1:G2000', // was 'OT DayOff' — now covers OT (Day Off) AND System/Software Issue submissions, one extra Type column
       leaveRequests:'Leave Requests!A1:H2000'
     },
-    // Duty Roster fallback (Schedule page only — Jan–Apr 2026 real Attendance
-    // data has gaps, this manually-maintained roster fills those in). Own
-    // separate Sheet file, own sheetId. Tab names use inconsistent month
-    // abbreviation on purpose ("Jan 2026" vs "March 2026") — that's exactly
-    // how they're named in the source sheet, not a typo here. Range is wide
-    // (A1:AZ300) since day-1 starts at column F and a 31-day month reaches
-    // column AJ — AZ leaves comfortable headroom. See parseDutyRoster_().
+    // Duty Roster — PRIMARY year-round source for the Schedule page (all 12
+    // months). Own separate Sheet file, own sheetId. Tab names are all being
+    // standardized to 3-letter-month + year ("Jan 2026", "Mar 2026", "Jun
+    // 2026"...) per the region owner — if a given month's tab hasn't been
+    // renamed yet, that month will just show no Roster data until it is.
+    // Range is wide (A1:AZ300) since day-1 starts at column F and a 31-day
+    // month reaches column AJ — AZ leaves comfortable headroom. See parseDutyRoster_().
     dutyRosterSheetId:'1cNOKxI2l9Ke2gRP7wZDdPMvY4vrcIfmcWa5FZLCjMrQ',
     dutyRosterRanges:{
       Jan:'Jan 2026!A1:AZ300',
       Feb:'Feb 2026!A1:AZ300',
-      Mar:'March 2026!A1:AZ300',
-      Apr:'April 2026!A1:AZ300'
+      Mar:'Mar 2026!A1:AZ300',
+      Apr:'Apr 2026!A1:AZ300',
+      May:'May 2026!A1:AZ300',
+      Jun:'Jun 2026!A1:AZ300',
+      Jul:'Jul 2026!A1:AZ300',
+      Aug:'Aug 2026!A1:AZ300',
+      Sep:'Sep 2026!A1:AZ300',
+      Oct:'Oct 2026!A1:AZ300',
+      Nov:'Nov 2026!A1:AZ300',
+      Dec:'Dec 2026!A1:AZ300'
     },
     tabNames:['Daily Chat Report','CX Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['CX','MP','BJ','BV','Welcome'],
@@ -1282,6 +1290,28 @@ var REGION_CONFIG={
       issueDay:'Issue Day!A1:G2000', // was 'OT DayOff' — now covers OT (Day Off) AND System/Software Issue submissions, one extra Type column
       leaveRequests:'Leave Requests!A1:H2000'
     },
+    // Duty Roster — PRIMARY year-round source for the Schedule page (all 12
+    // months), same as INR. Own separate Sheet file. Confirmed via direct
+    // fetch and cross-checked against real cell data: tab names use FULL
+    // month names + year ("January 2026", not "Jan 2026" like INR),
+    // consistent across the whole year per the region owner. Layout also
+    // differs from INR (PSD-ID/Name columns swapped, no blank spacer column
+    // before Day 1) — see ATT_ROSTER_LAYOUT_PKR.
+    dutyRosterSheetId:'1jYMxyByfU3RJTOGRnlGFZAqUJeiElrf8DdA1yhwkqao',
+    dutyRosterRanges:{
+      Jan:'January 2026!A1:AZ300',
+      Feb:'February 2026!A1:AZ300',
+      Mar:'March 2026!A1:AZ300',
+      Apr:'April 2026!A1:AZ300',
+      May:'May 2026!A1:AZ300',
+      Jun:'June 2026!A1:AZ300',
+      Jul:'July 2026!A1:AZ300',
+      Aug:'August 2026!A1:AZ300',
+      Sep:'September 2026!A1:AZ300',
+      Oct:'October 2026!A1:AZ300',
+      Nov:'November 2026!A1:AZ300',
+      Dec:'December 2026!A1:AZ300'
+    },
     tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['CX','MP','BJ','JW','DP','KV8','HB','SBJ','SP'],
     brandLabels:{CX:'CX',MP:'MP',BJ:'BJ',JW:'JW',DP:'DP',KV8:'KV8',HB:'HB',SBJ:'SBJ',SP:'SP'},
@@ -1310,6 +1340,30 @@ var REGION_CONFIG={
       shiftTypeRef:'Attendance Report!U1:AF60', // generic shift-type baselines (AM/PM) if present — defaultShiftTypes above covers it either way
       issueDay:'Issue Day!A1:G2000', // was 'OT DayOff' — now covers OT (Day Off) AND System/Software Issue submissions, one extra Type column
       leaveRequests:'Leave Requests!A1:H2000'
+    },
+    // Duty Roster — PRIMARY year-round source for the Schedule page (all 12
+    // months), same as INR/PKR. Own separate Sheet file. Confirmed via
+    // direct fetch and cross-checked against real cell data: tab names are
+    // just the bare month, NO year suffix ("April", not "April 2026" or
+    // "Apr 2026") — a third different naming convention, consistent across
+    // the whole year per the region owner. Layout is also completely
+    // different from INR/PKR: Day 1 starts one column earlier (E, not F),
+    // and shift codes are abbreviated letters (M/N/OFF) instead of full
+    // words — see ATT_ROSTER_LAYOUT_PHP.
+    dutyRosterSheetId:'1AS-skLBOgaVDBvr7Zi9DbXqdG0VRiAkD3S9D24_E2zw',
+    dutyRosterRanges:{
+      Jan:'January!A1:BC300',
+      Feb:'February!A1:BC300',
+      Mar:'March!A1:BC300',
+      Apr:'April!A1:BC300',
+      May:'May!A1:BC300',
+      Jun:'June!A1:BC300',
+      Jul:'July!A1:BC300',
+      Aug:'August!A1:BC300',
+      Sep:'September!A1:BC300',
+      Oct:'October!A1:BC300',
+      Nov:'November!A1:BC300',
+      Dec:'December!A1:BC300'
     },
     tabNames:['Daily Chat Report','Internal SLA Metrics','Outsource SLA Metrics','QA Error Diagnostics','CS Detail','SLA Remarks'],
     brands:['BJ','BV'],
@@ -1376,16 +1430,17 @@ var slaParsed=null;
 var attParsed=null;
 var attIssueParsed={map:{},list:[]};    // Issue Day submissions (OT Day-off / System-Software Issue) — Schedule page
 var attLeaveParsed={byAgentDay:{},list:[]}; // Leave requests (Schedule page)
-// Duty Roster fallback (Schedule page ONLY — never touches Attendance page
-// numbers/rates). For months where real Attendance check-in data is missing
-// (currently Jan–Apr 2026 for INR), this fills in the Schedule grid from a
-// manually-maintained roster sheet instead of showing a blank "OFF" day.
+// Duty Roster (Schedule page ONLY — never touches Attendance page numbers/
+// rates). PRIMARY year-round source for the Schedule grid's shift letter —
+// see the note on DUTY_ROSTER_MONTHS just below for the full picture.
 // See parseDutyRoster_() below and its use inside schedBuildData_().
-var dutyRosterParsed={shiftByAgentDay:{},leaveByAgentDay:{},weekOffByAgentDay:{},rosterAgentMonths:{}};
-// Months this fallback applies to — matches the actual data-gap window.
-// Change/extend this list (and REGION_CONFIG's dutyRosterRanges) if the gap
-// window changes, or if PKR/PHP get their own roster wired up later.
-var DUTY_ROSTER_MONTHS=['Jan','Feb','Mar','Apr'];
+var dutyRosterParsed={shiftByAgentDay:{},leaveByAgentDay:{},weekOffByAgentDay:{},rosterAgentMonths:{},firstFilledDay:{},agentInfoByMonth:{},resignByAgentDay:{}};
+// Roster is now the PRIMARY year-round source for the Schedule page's shift
+// letter (D/N/M/Off) — Attendance only contributes Late/Early/OT annotations
+// on days it has a real check-in row for. All 12 months, every region.
+// (Originally just Jan–Apr as a gap-fill patch; the region owners have since
+// asked to make Roster the permanent source of truth going forward.)
+var DUTY_ROSTER_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 var ISSUE_TYPES={
   OT_DAYOFF:{label:'OT (Day Off)',short:'OT',color:'#9b7ff4',forgivesLateEarly:true,suppressExtraBreakAnomaly:true},
   SYSTEM_ISSUE:{label:'System / Software Issue',short:'SYS',color:'#f5a83c',forgivesLateEarly:true,suppressExtraBreakAnomaly:false},
@@ -1835,17 +1890,27 @@ function loadAll(){
     setSt('loading');
     var cfg=REGION_CONFIG[currentRegion];
     var dr=cfg.dutyRosterRanges||{};
-    var keys=['sla','daily','qa','slaOut','profile','slaRemarks','attendance','issueDay','leaveRequests','shiftLookup','shiftTypeRef','dutyRosterJan','dutyRosterFeb','dutyRosterMar','dutyRosterApr'];
-    var ranges=[cfg.ranges.sla,cfg.ranges.daily,cfg.ranges.qa,cfg.ranges.slaOut,cfg.ranges.profile,cfg.ranges.slaRemarks,cfg.ranges.attendance,cfg.ranges.issueDay,cfg.ranges.leaveRequests,cfg.ranges.shiftLookup,cfg.ranges.shiftTypeRef,dr.Jan,dr.Feb,dr.Mar,dr.Apr];
+    var baseKeys=['sla','daily','qa','slaOut','profile','slaRemarks','attendance','issueDay','leaveRequests','shiftLookup','shiftTypeRef'];
+    var baseRanges=[cfg.ranges.sla,cfg.ranges.daily,cfg.ranges.qa,cfg.ranges.slaOut,cfg.ranges.profile,cfg.ranges.slaRemarks,cfg.ranges.attendance,cfg.ranges.issueDay,cfg.ranges.leaveRequests,cfg.ranges.shiftLookup,cfg.ranges.shiftTypeRef];
+    var baseSheetIds=[cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.attendanceSheetId];
+    // Duty Roster — all 12 months now (was just Jan–Apr), generated from
+    // ATT_MO_ORDER so there's no chance of a typo'd month key creeping in
+    // across 3 regions x 12 months. Each is quietly skipped (empty result)
+    // if that month's tab range isn't configured yet for this region.
+    var rosterKeys=ATT_MO_ORDER.map(function(m){ return 'dutyRoster'+m; });
+    var rosterRanges=ATT_MO_ORDER.map(function(m){ return dr[m]; });
+    var rosterSheetIds=ATT_MO_ORDER.map(function(){ return cfg.dutyRosterSheetId; });
+    var keys=baseKeys.concat(rosterKeys);
+    var ranges=baseRanges.concat(rosterRanges);
     // Attendance lives in its own Google Sheet file (separate sheetId) — everything
     // else shares the region's main sheetId. A missing/placeholder attendanceSheetId
     // just means no attendance data for this region yet (page/section stay empty,
     // nothing errors out) — same "quietly skip" pattern already used for slaOut.
     // OT DayOff / Leave Requests / Shift Lookup / Shift Type Ref live as extra tabs/ranges in that SAME attendance file.
-    // Duty Roster (dutyRosterJan..Apr) lives in its OWN separate Sheet file
+    // Duty Roster (dutyRosterJan..Dec) lives in its OWN separate Sheet file
     // (cfg.dutyRosterSheetId) — quietly skipped (empty result) for regions
     // that don't have one configured yet, same pattern as attendanceSheetId.
-    var sheetIds=[cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.sheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.attendanceSheetId,cfg.dutyRosterSheetId,cfg.dutyRosterSheetId,cfg.dutyRosterSheetId,cfg.dutyRosterSheetId];
+    var sheetIds=baseSheetIds.concat(rosterSheetIds);
     var promises=ranges.map(function(range,idx){
       var sid=sheetIds[idx];
       if(!range||!sid||sid.indexOf('PASTE_')===0){ raw[keys[idx]]=[]; return Promise.resolve(); }
@@ -1873,14 +1938,14 @@ function loadAll(){
       slaRemarksMap=buildSlaRemarksMap_(raw.slaRemarks);
       attIssueParsed=parseIssueDay(raw.issueDay);
       attLeaveParsed=parseLeaveRequests(raw.leaveRequests);
-      // Duty Roster fallback (Schedule page only, Jan–Apr — see dutyRosterSheetId
+      // Duty Roster (Schedule page only, all 12 months — see dutyRosterSheetId
       // above). Leave-type entries (UPL/AL/SL/Vacation) merge into
       // attLeaveParsed.byAgentDay directly so the Schedule grid's existing
       // leave lookup renders them automatically; shift entries (Day/Night/Mid)
-      // stay separate in dutyRosterParsed and are only consulted from
-      // schedBuildData_() when a real Attendance row is missing for that day.
-      // A REAL Leave Request or a real Attendance row always wins over the
-      // roster — this only ever fills a gap, never overwrites real data.
+      // stay separate in dutyRosterParsed and are now the PRIMARY source for
+      // schedBuildData_()'s shift letter — a real Attendance row still wins
+      // for its Late/Early/OT annotations, but no longer overrides the
+      // shift itself. A REAL Leave Request always wins over the roster.
       // Name->key index built fresh each load (from the real agent directory)
       // so Roster rows with no PSD-ID column (some team blocks don't have
       // one) can still be matched by name instead of being skipped outright.
@@ -1889,9 +1954,10 @@ function loadAll(){
         var dir=buildAgentDirectory();
         Object.keys(dir).forEach(function(k){ dutyRosterNameMap_[normNameLoose_(dir[k].name)]=k; });
       })();
-      dutyRosterParsed=parseDutyRoster_({
-        Jan:raw.dutyRosterJan, Feb:raw.dutyRosterFeb, Mar:raw.dutyRosterMar, Apr:raw.dutyRosterApr
-      },dutyRosterNameMap_);
+      var dutyRosterLayout_=({INR:ATT_ROSTER_LAYOUT_INR,PKR:ATT_ROSTER_LAYOUT_PKR,PHP:ATT_ROSTER_LAYOUT_PHP})[currentRegion]||ATT_ROSTER_LAYOUT_INR;
+      var dutyRosterMonthRows_={};
+      ATT_MO_ORDER.forEach(function(m){ dutyRosterMonthRows_[m]=raw['dutyRoster'+m]; });
+      dutyRosterParsed=parseDutyRoster_(dutyRosterMonthRows_,dutyRosterNameMap_,dutyRosterLayout_);
       Object.keys(dutyRosterParsed.leaveByAgentDay).forEach(function(k){
         if(!attLeaveParsed.byAgentDay[k]) attLeaveParsed.byAgentDay[k]=dutyRosterParsed.leaveByAgentDay[k];
       });
@@ -3284,88 +3350,144 @@ function parseLeaveRequests(rows){
   return {byAgentDay:byAgentDay,list:list};
 }
 
-// ── DUTY ROSTER FALLBACK (Schedule page only, INR Jan–Apr 2026 gap) ────────
-// Separate, manually-maintained Google Sheet (dutyRosterSheetId), one tab per
-// month ("Jan 2026", "Feb 2026", "March 2026", "April 2026" — inconsistent
-// abbreviation is intentional, matches the real tab names). Sheet layout,
-// confirmed against real raw cell data (cell reference K90 = 6-Jan, checked
-// directly in the sheet): Col A=S.No | B=Name | C=PSD-ID (may be BLANK in
-// some team blocks — see below) | D=Project | E=(blank spacer) | F..=Day 1,2,3...
-// Team-grouping header rows (e.g. "CX INR", "SV OP TEAM", "Staff Details")
-// are skipped automatically since they leave column B blank or column A
-// non-numeric — every actual staff row is matched regardless of which team
-// block it sits under.
+// ── DUTY ROSTER (Schedule page only — PRIMARY year-round shift source) ─────
+// Separate, manually-maintained Google Sheet per region (dutyRosterSheetId),
+// one tab per month. Column positions, tab-naming convention, and shift
+// vocabulary are ALL DIFFERENT per region — confirmed by directly fetching
+// each real sheet (not guessed from screenshots) — so every region gets its
+// own layout config passed in below. See ATT_ROSTER_LAYOUT_INR/PKR/PHP.
 //
-// NOT every block in this sheet has a PSD-ID in column C — some ("Staff
-// Details" block, confirmed via screenshot) only have a Name column, with
-// B:E merged into one wide cell so C/D/E all read blank for those rows. For
-// those, matching falls back to NAME (via normNameLoose_, which also
-// tolerates "First Last" vs "Last First" ordering — confirmed necessary,
-// e.g. "Dhanush Eswaran" here vs "Eswaran Dhanush" in Attendance) against
-// nameToKeyMap (built from the real agent directory in loadAll()). A row
-// that matches neither a PSD-ID nor a known name is skipped — it's not
-// silently guessed at.
-//
-// Per-day cell text is classified into one of four buckets:
-//   - Shift word (Day/Night/Mid) -> shiftByAgentDay (only consulted by
-//     schedBuildData_() when that day has NO real Attendance row)
-//   - Leave word (UPL/AL/SL/Vacation) -> leaveByAgentDay (merged directly
-//     into attLeaveParsed.byAgentDay in loadAll(), filling gaps only)
-//   - "Week Off" -> weekOffByAgentDay (a REAL day off — used only to make
-//     sure schedBuildData_()'s "blank means not-yet-joined" logic below
-//     doesn't misfire on an explicit Week Off day. OT on a Week Off day is
-//     tracked separately via the existing Issue Day "OT (Day Off)"
-//     submission mechanism — ISSUE_TYPES.OT_DAYOFF — not here.)
-//   - truly blank cell -> nothing recorded for that exact day, BUT the
-//     agent+month pair is still marked in rosterAgentMonths (this row DID
-//     match a real row in the roster for this month, it's just blank on
-//     this particular day — almost always because the agent joined
-//     partway through the month). schedBuildData_() uses this to render a
-//     genuinely EMPTY cell instead of "OFF" for those pre-joining days —
-//     "no schedule yet" is a different fact than "scheduled off".
-// Once a cell says "Resign" (anywhere in the text, case-insensitive), every
-// remaining day in that row is skipped — the agent left partway through that
-// month and the rest of the row's cells (if any) aren't real schedule data.
-var ATT_ROSTER_SHIFT_WORDS_={day:'Day',night:'Night',mid:'Mid'};
-var ATT_ROSTER_LEAVE_WORDS_={upl:'UPL',al:'ANNUAL',sl:'SICK',vacation:'ANNUAL','sick leave':'SICK','annual leave':'ANNUAL'};
-function parseDutyRoster_(monthRowsMap,nameToKeyMap){
-  var out={shiftByAgentDay:{},leaveByAgentDay:{},weekOffByAgentDay:{},rosterAgentMonths:{}};
+// Common behavior across all three layouts:
+//   - Team-grouping/header rows are skipped automatically (blank Name column).
+//   - If a row has no usable PSD-ID for that layout, matching falls back to
+//     NAME (via normNameLoose_, tolerant of "First Last" vs "Last First")
+//     against nameToKeyMap (the real agent directory, built in loadAll()).
+//     A row matching neither is skipped — never guessed at.
+//   - Per-day cell text classifies into: shift word -> shiftByAgentDay
+//     (only consulted when that day has NO real Attendance row); leave word
+//     -> leaveByAgentDay (merged into attLeaveParsed.byAgentDay, gap-fill
+//     only); an explicit "day off" word -> weekOffByAgentDay (a REAL day
+//     off, distinct from a truly blank cell); blank cell -> nothing for
+//     that exact day, but the agent+month pair is still marked present in
+//     rosterAgentMonths (this row DID match), and firstFilledDay records
+//     the earliest day in the month anything was actually filled in for
+//     them. schedBuildData_() only treats a blank day as "not yet joined"
+//     (renders empty, not OFF) when it comes BEFORE firstFilledDay — a
+//     blank cell AFTER that (e.g. the Roster simply wasn't finished filling
+//     out the month's last day) falls through to a normal OFF instead,
+//     since the agent is clearly active by then.
+//   - Once a cell says "Resign" (anywhere, case-insensitive), every
+//     remaining day in that row is skipped for the rest of that month.
+var ATT_ROSTER_LAYOUT_INR={
+  // Confirmed against real raw cell data (K90 = 6-Jan, checked directly in
+  // the sheet). A=S.No | B=Name | C=PSD-ID | D=Project | E=blank | F..=Day1+
+  nameIdx:1, psdIdx:2, dayStartIdx:5,
+  shiftWords:{day:'Day',night:'Night',mid:'Mid'},
+  leaveWords:{upl:'UPL',al:'ANNUAL',sl:'SICK',vacation:'ANNUAL','sick leave':'SICK','annual leave':'ANNUAL'},
+  offWords:['week off']
+};
+var ATT_ROSTER_LAYOUT_PKR={
+  // CORRECTED: originally read as F=Day1 from an earlier fetch of the June
+  // tab, but that reading was thrown off by the same merged-header-row
+  // misalignment issue we hit with INR. Directly confirmed against the real
+  // January 2026 tab (column letters visible in the actual Sheets UI:
+  // O=11-Jan, working backwards day1 lands on column E) — there is NO blank
+  // spacer column here, unlike INR. A=S.No | B=PSD-ID | C=Name | D=Project/role | E..=Day1+
+  nameIdx:2, psdIdx:1, dayStartIdx:4,
+  shiftWords:{day:'Day',night:'Night',mid:'Mid'},
+  leaveWords:{upl:'UPL',al:'ANNUAL',sl:'SICK',vacation:'ANNUAL','sick leave':'SICK','annual leave':'ANNUAL'},
+  offWords:['week off']
+};
+var ATT_ROSTER_LAYOUT_PHP={
+  // Confirmed against real raw cell data (April 2026 tab). Completely
+  // different shape from INR/PKR: A=Nº | B=PSD | C=NAME | D=Sex | E..=Day1+
+  // (one column earlier than INR/PKR's F start) — and shift codes are
+  // single/double letters, not full words: M=Morning, N=Night, OFF=day off.
+  nameIdx:2, psdIdx:1, dayStartIdx:4,
+  shiftWords:{m:'Day',n:'Night'},
+  leaveWords:{upl:'UPL',al:'ANNUAL',sl:'SICK'},
+  offWords:['off']
+};
+// Scans a month-tab's first few rows for a header cell that literally reads
+// like "1-Jul" / "01-Jul" (day 1 of THIS specific month) and returns its
+// 0-based column index. Different month tabs in the SAME Roster spreadsheet
+// have been found to NOT share the same column layout (e.g. INR's Jan tab
+// has Day 1 at column F, but its Jul tab has Day 1 at column E) — detecting
+// this per-tab, instead of trusting one fixed layout.dayStartIdx for the
+// whole year, is what actually makes this robust against that. Returns
+// null if no match is found (caller falls back to layout.dayStartIdx).
+function detectDayOneCol_(rows,monthKey){
+  var re=new RegExp('^0?1[-\\s/]'+monthKey,'i');
+  for(var r=0;r<Math.min(rows.length,6);r++){
+    var row=rows[r]||[];
+    for(var c=0;c<row.length;c++){
+      if(re.test(String(row[c]||'').trim())) return c;
+    }
+  }
+  return null;
+}
+function parseDutyRoster_(monthRowsMap,nameToKeyMap,layout){
+  layout=layout||ATT_ROSTER_LAYOUT_INR;
+  var out={shiftByAgentDay:{},leaveByAgentDay:{},weekOffByAgentDay:{},rosterAgentMonths:{},firstFilledDay:{},agentInfoByMonth:{},resignByAgentDay:{}};
   nameToKeyMap=nameToKeyMap||{};
   Object.keys(monthRowsMap||{}).forEach(function(monthKey){
     var rows=monthRowsMap[monthKey];
     if(!rows||!rows.length) return;
+    // Per-tab column detection — falls back to the region's static layout
+    // (layout.dayStartIdx, already a 0-based column index for Day 1) only
+    // if the header scan above doesn't find a recognizable date cell.
+    var detectedCol=detectDayOneCol_(rows,monthKey);
+    var day1ColIdx=(detectedCol!==null)?detectedCol:layout.dayStartIdx;
     for(var r=0;r<rows.length;r++){
       var row=rows[r]||[];
-      var name=String(row[1]||'').trim();
+      var name=String(row[layout.nameIdx]||'').trim();
       if(!name) continue; // section-header rows leave the Name column blank
-      var psdRaw=String(row[2]||'').trim();
+      var psdRaw=String(row[layout.psdIdx]||'').trim();
       var key=null;
       if(psdRaw&&/\d/.test(psdRaw)){
         key=normPsd_(psdRaw);
       } else {
-        // No PSD-ID in this block (e.g. "Staff Details") — fall back to
-        // matching the real agent directory by name.
+        // No usable PSD-ID for this row — fall back to matching the real
+        // agent directory by name.
         var byName=nameToKeyMap[normNameLoose_(name)];
         if(byName) key=byName;
       }
       if(!key) continue; // couldn't match to a real agent either way — skip, don't guess
       out.rosterAgentMonths[key+'||'+monthKey]=true;
+      // Remembers a display name/PSD-ID for this agent+month even if they
+      // never get a Days Present row in real Attendance for this month —
+      // schedBuildData_() uses this to add them to the visible agent list,
+      // since otherwise someone who ONLY exists in the Roster (not in CS
+      // Detail, not in any Attendance row this month) would never show up
+      // in the Schedule at all, no matter how much Roster data exists for them.
+      out.agentInfoByMonth[key+'||'+monthKey]={name:name,psdId:psdRaw||key};
+      var fkey=key+'||'+monthKey;
       for(var day=1;day<=31;day++){
-        var colIdx=4+day; // F(=index5) is Day 1 -> colIdx = 4+day
+        var colIdx=day1ColIdx+day-1;
         var cellRaw=String(row[colIdx]||'').trim();
         if(!cellRaw) continue; // blank cell — agent+month already marked present above, this specific day just has nothing
-        if(/resign/i.test(cellRaw)) break; // stop reading this row from here on
+        if(/resign/i.test(cellRaw)){
+          // From this exact day through the end of the month, mark every
+          // day as "Resign" — matches the Google Sheet literally (it's a
+          // real HR fact, not a missing-data gap that should quietly fall
+          // back to a generic OFF). Then stop reading the rest of this row.
+          for(var rd=day;rd<=31;rd++) out.resignByAgentDay[key+'||'+monthKey+'||'+rd]=true;
+          break;
+        }
         var norm=cellRaw.toLowerCase();
         var dayKey=key+'||'+monthKey+'||'+day;
-        if(ATT_ROSTER_SHIFT_WORDS_.hasOwnProperty(norm)){
-          out.shiftByAgentDay[dayKey]={shift:ATT_ROSTER_SHIFT_WORDS_[norm],psdId:psdRaw||key,name:name,month:monthKey,day:day};
-        } else if(ATT_ROSTER_LEAVE_WORDS_.hasOwnProperty(norm)){
-          out.leaveByAgentDay[dayKey]={type:ATT_ROSTER_LEAVE_WORDS_[norm],note:'',psdId:psdRaw||key,name:name};
-        } else if(norm==='week off'){
+        if(layout.shiftWords.hasOwnProperty(norm)){
+          out.shiftByAgentDay[dayKey]={shift:layout.shiftWords[norm],psdId:psdRaw||key,name:name,month:monthKey,day:day};
+          if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
+        } else if(layout.leaveWords.hasOwnProperty(norm)){
+          out.leaveByAgentDay[dayKey]={type:layout.leaveWords[norm],note:'',psdId:psdRaw||key,name:name};
+          if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
+        } else if(layout.offWords.indexOf(norm)>=0){
           // Tracked explicitly (not just skipped) so it's excluded from the
           // "blank = not yet joined" logic in schedBuildData_() — this is a
           // real, explicit day-off decision, not a missing-data gap.
           out.weekOffByAgentDay[dayKey]=true;
+          if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
         }
         // anything else unrecognized: intentionally no entry.
       }
@@ -6101,16 +6223,44 @@ function renderAttendanceDailyPanel(){
 // flat list. Internal CS only, same scope as the Attendance page.
 var schedMonthFilter=null;
 
+// Every month that should be selectable on the Schedule page: real
+// Roster-driven: the dropdown reflects "which months has the Roster been
+// filled out for", NOT "does Attendance happen to have any rows this
+// month" — a region can have a handful of stray/early Attendance check-ins
+// for a future month before that month's Roster tab even exists yet, and
+// selecting that month would just fall back to old Attendance-derived
+// behavior inconsistently. Falls back to attParsed.monthList ONLY if this
+// region has NO Roster data at all (Roster isn't wired up for it yet) —
+// preserves the original Attendance-only behavior for that case instead of
+// showing an empty dropdown. Shared by populateScheduleMonthDropdown_() and
+// renderSchedule()'s own validation below — both used to compute this
+// independently and could disagree, which silently reset a valid
+// selection. Now there's exactly one source of truth.
+function schedAvailableMonths_(){
+  var rosterMonthSet={};
+  Object.keys((dutyRosterParsed&&dutyRosterParsed.rosterAgentMonths)||{}).forEach(function(k){
+    rosterMonthSet[k.split('||')[1]]=true;
+  });
+  var hasAnyRoster=Object.keys(rosterMonthSet).length>0;
+  var monthSet=hasAnyRoster?rosterMonthSet:{};
+  if(!hasAnyRoster){
+    // No Roster data at all for this region — fall back to the original
+    // Attendance-only month list so the page still works.
+    ((attParsed&&attParsed.monthList)||[]).forEach(function(m){ monthSet[m]=true; });
+  }
+  return Object.keys(monthSet).sort(function(a,b){ return (ATT_MO_IDX[a]||0)-(ATT_MO_IDX[b]||0); });
+}
 function populateScheduleMonthDropdown_(){
   var sel=document.getElementById('sched-month');
-  if(!sel||!attParsed||!attParsed.monthList) return;
+  if(!sel) return;
   var current=sel.value;
-  sel.innerHTML=attParsed.monthList.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
-  if(attParsed.monthList.indexOf(current)>=0){
+  var months=schedAvailableMonths_();
+  sel.innerHTML=months.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+  if(months.indexOf(current)>=0){
     sel.value=current;
   } else {
     // Default to the most recent month that actually has data
-    schedMonthFilter=attParsed.monthList[attParsed.monthList.length-1];
+    schedMonthFilter=months[months.length-1];
     sel.value=schedMonthFilter;
   }
 }
@@ -6167,67 +6317,132 @@ function schedBuildData_(){
     var key=normPsd_(r.psdId);
     if(!agentsByKey[key]) agentsByKey[key]={psdId:r.psdId,name:r.name||r.psdId,key:key};
   });
+  // Third source: anyone who exists in the Duty Roster for this month but
+  // isn't in CS Detail's active roster AND has no real Attendance row this
+  // month either — ONLY added if they can still be verified against CS
+  // Detail (findAgentProfile_ — same lookup the Agent Audit Profile page
+  // uses). This is a deliberate guardrail: the Roster sheet can contain
+  // stale/irrelevant rows (e.g. a "Move To Telesale department" banner row
+  // seen in the real sheet, or people who've since left/transferred) — if
+  // someone can't be found in CS Detail at all, they're not added here,
+  // even if their PSD-ID/name happens to match a Roster row.
+  if(DUTY_ROSTER_MONTHS.indexOf(schedMonthFilter)>=0){
+    Object.keys(dutyRosterParsed.rosterAgentMonths||{}).forEach(function(rk){
+      var parts=rk.split('||');
+      if(parts[1]!==schedMonthFilter) return;
+      var key=parts[0];
+      if(agentsByKey[key]) return;
+      var info=dutyRosterParsed.agentInfoByMonth[rk];
+      if(!info) return;
+      if(!findAgentProfile_(key,info.name)) return; // not a verifiable CS Detail agent — skip
+      agentsByKey[key]={psdId:info.psdId,name:info.name,key:key};
+    });
+  }
   var agents=Object.values(agentsByKey).sort(function(a,b){return a.name.localeCompare(b.name);});
 
   var q=(document.getElementById('sched-search')||{}).value||'';
   q=q.trim().toLowerCase();
   if(q) agents=agents.filter(function(a){return a.name.toLowerCase().indexOf(q)>=0||String(a.psdId).toLowerCase().indexOf(q)>=0;});
 
-  // Index rows for this month by "psdKey-day" for O(1) lookup while building the grid
-  var byAgentDay={};
+  // Index REAL Attendance rows for this month by "psdKey-day" — this used
+  // to be THE data source for byAgentDay directly; it's now consulted as an
+  // ANNOTATION layer instead (see the rewritten loop below).
+  var attByAgentDay={};
   monthRows.forEach(function(r){
-    byAgentDay[normPsd_(r.psdId)+'-'+r.day]=r;
+    attByAgentDay[normPsd_(r.psdId)+'-'+r.day]=r;
   });
 
-  // Duty Roster fallback — ONLY for the configured gap months (Jan–Apr), and
-  // ONLY for agent-days that have no real Attendance row above. A real
-  // Attendance row always wins; this purely fills blanks. The synthetic
-  // record below carries just enough fields for the existing cell-render
-  // logic in renderSchedule() to work unchanged (shift/checkIn/checkOut/
-  // isLate/isEarly/issueType) — isLate/isEarly are always false here since
-  // roster data has no real check-in/out times to judge punctuality from.
-  if(DUTY_ROSTER_MONTHS.indexOf(schedMonthFilter)>=0){
-    agents.forEach(function(a){
-      var presentInRoster=dutyRosterParsed.rosterAgentMonths[a.key+'||'+schedMonthFilter];
-      for(var d3=1;d3<=daysInMonth;d3++){
-        var cellKey=a.key+'-'+d3;
-        var rosterKey=a.key+'||'+schedMonthFilter+'||'+d3;
-        if(byAgentDay[cellKey]){
-          // A REAL Attendance row exists for this day — it always wins as-is.
-          // (OT on a Roster "Week Off" day is already tracked properly via
-          // the existing Issue Day "OT (Day Off)" submission mechanism —
-          // see ISSUE_TYPES.OT_DAYOFF — which already renders with its own
-          // purple ring below. No need to guess OT by cross-checking the
-          // Roster here; that submission data is more accurate anyway.)
-          continue;
-        }
-        var rosterEntry=dutyRosterParsed.shiftByAgentDay[rosterKey];
-        if(rosterEntry){
-          // BUG FIX: this synthetic record used to hardcode issueType:null,
-          // which silently dropped any real OT (Day Off) / System Issue /
-          // Extra Break (2h) submission for days that only had Roster data
-          // (no real Attendance row) — those submissions exist independent
-          // of Attendance and must still be looked up and honored here.
-          var issueEntry_=attIssueParsed&&attIssueParsed.map&&attIssueParsed.map[a.key+'||'+schedMonthFilter+'||'+d3];
+  // ── Roster-first Schedule building (all 12 months) ─────────────────────
+  // Priority flip (per region owner request): the Duty Roster is now the
+  // PRIMARY source for "what shift was this agent supposed to work" — it
+  // used to be the other way around (Attendance's own derived shift won,
+  // Roster only filled Jan–Apr gaps). Real Attendance data is still fully
+  // consulted, but only to ANNOTATE a Roster-provided day with Late/Early/
+  // OT/System-Issue/Extra-Break facts — it does NOT override which shift
+  // letter (D/N/M) gets displayed. This deliberately does NOT touch the
+  // Attendance page's own Late/Early calculations or KPIs at all — those
+  // still come from the exact same parseAttendancePkrV2_ logic as always;
+  // this only changes which of that logic's OUTPUT fields end up displayed
+  // on the Schedule grid, and how the day's shift is decided.
+  var byAgentDay={};
+  agents.forEach(function(a){
+    var presentInRoster=dutyRosterParsed.rosterAgentMonths[a.key+'||'+schedMonthFilter];
+    var firstFilledDay=dutyRosterParsed.firstFilledDay[a.key+'||'+schedMonthFilter];
+    for(var d3=1;d3<=daysInMonth;d3++){
+      var cellKey=a.key+'-'+d3;
+      var rosterKey=a.key+'||'+schedMonthFilter+'||'+d3;
+      var attRow=attByAgentDay[cellKey]; // real Attendance row for this exact day, if any
+
+      if(dutyRosterParsed.resignByAgentDay[rosterKey]){
+        // Roster explicitly marked "Resign" on or before this day — a hard
+        // HR fact, shown literally as "Resign" regardless of what Attendance says.
+        byAgentDay[cellKey]={__resigned:true};
+        continue;
+      }
+
+      var rosterEntry=dutyRosterParsed.shiftByAgentDay[rosterKey];
+      if(rosterEntry){
+        // Roster says a working shift — that's the letter shown. If a real
+        // Attendance row exists for this same day, its Late/Early/check-in-
+        // out/issueType annotate on top (Attendance judges compliance,
+        // Roster defines the plan) — its own derived .shift is NOT used.
+        var issueEntry_=attIssueParsed&&attIssueParsed.map&&attIssueParsed.map[rosterKey];
+        if(attRow){
+          byAgentDay[cellKey]={
+            date:attRow.date||(schedMonthFilter+' '+d3), psdId:a.psdId, name:a.name,
+            shift:rosterEntry.shift, checkIn:attRow.checkIn, checkOut:attRow.checkOut,
+            isLate:attRow.isLate, lateMin:attRow.lateMin, isEarly:attRow.isEarly, earlyMin:attRow.earlyMin,
+            issueType:(attRow.issueType!=null?attRow.issueType:(issueEntry_?issueEntry_.type:null))
+          };
+        } else {
           byAgentDay[cellKey]={
             date:schedMonthFilter+' '+d3, psdId:a.psdId, name:a.name,
             shift:rosterEntry.shift, checkIn:'', checkOut:'',
             isLate:false, lateMin:0, isEarly:false, earlyMin:0,
             issueType:issueEntry_?issueEntry_.type:null
           };
-        } else if(presentInRoster&&!dutyRosterParsed.weekOffByAgentDay[rosterKey]){
-          // This agent DOES have a row in the Roster for this month, but
-          // this exact day's cell was blank there — almost always because
-          // they joined partway through the month. That's a different fact
-          // than "scheduled off", so render a genuinely empty cell instead
-          // of "OFF" (which would incorrectly imply an actual day-off
-          // decision was made). Doesn't apply if the roster explicitly said
-          // Week Off for this day — that's a real day off, shows as OFF as normal.
-          byAgentDay[cellKey]={__noSchedule:true};
         }
+        continue;
       }
-    });
-  }
+
+      if(dutyRosterParsed.weekOffByAgentDay[rosterKey]){
+        // Roster explicitly says Day Off. If Attendance shows a real
+        // check-in anyway, that's overtime — surface it exactly like
+        // before via the existing issueType mechanism (OT_DAYOFF renders
+        // as OFF+purple ring in renderSchedule(); no submission at all
+        // means it shows as whatever shift Attendance derived, same as the
+        // pre-Roster-priority behavior). No real check-in -> stays a plain
+        // day off (no entry created here; falls through to default OFF).
+        if(attRow){
+          var issueEntry2_=attIssueParsed&&attIssueParsed.map&&attIssueParsed.map[rosterKey];
+          byAgentDay[cellKey]={
+            date:attRow.date||(schedMonthFilter+' '+d3), psdId:a.psdId, name:a.name,
+            shift:attRow.shift, checkIn:attRow.checkIn, checkOut:attRow.checkOut,
+            isLate:attRow.isLate, lateMin:attRow.lateMin, isEarly:attRow.isEarly, earlyMin:attRow.earlyMin,
+            issueType:(attRow.issueType!=null?attRow.issueType:(issueEntry2_?issueEntry2_.type:null))
+          };
+        }
+        continue;
+      }
+
+      // Roster has nothing at all for this day (no shift word, no Week
+      // Off, no Resign).
+      if(presentInRoster&&firstFilledDay!==undefined&&d3<firstFilledDay){
+        // Before this agent's first Roster entry this month — not yet
+        // joined. Genuinely empty cell, not counted toward Day/Mid/Night/Off.
+        byAgentDay[cellKey]={__noSchedule:true};
+      } else if(attRow){
+        // Safety net: Roster is blank here but real Attendance exists
+        // anyway. The region owners' process is to finish next month's
+        // Roster by month-end, so this shouldn't normally happen — but if
+        // it does, don't silently drop real data: fall back to
+        // Attendance's own derived shift, same as the original pre-Roster-
+        // priority behavior.
+        byAgentDay[cellKey]=attRow;
+      }
+      // else: nothing recorded — falls through to the default OFF display.
+    }
+  });
 
   var WEEKDAY_LETTERS=['S','M','T','W','T','F','S'];
   // 2026-01-01 is a Thursday (index 4) — used to compute weekday letters
@@ -6242,7 +6457,14 @@ function schedBuildData_(){
 function renderSchedule(){
   var emptyEl=document.getElementById('sched-empty');
   var bodyEl=document.getElementById('sched-body');
-  if(!attParsed||!attParsed.monthList||!attParsed.monthList.length){
+  // Roster is now the primary year-round source, so "no data" must check
+  // BOTH Attendance and Roster before giving up — a region can legitimately
+  // have zero Attendance rows (not wired up yet, or just not used) while
+  // still having a full Roster to build the Schedule from. Only bail out
+  // here if NEITHER source has anything at all.
+  var hasAnyRosterData=Object.keys((dutyRosterParsed&&dutyRosterParsed.rosterAgentMonths)||{}).length>0;
+  var hasAnyAttendanceMonth=!!(attParsed&&attParsed.monthList&&attParsed.monthList.length);
+  if(!hasAnyAttendanceMonth&&!hasAnyRosterData){
     if(emptyEl){
       emptyEl.style.display='block';
       var msg='No attendance data loaded for this region yet -- the Schedule view is built from Attendance check-in records.';
@@ -6260,7 +6482,8 @@ function renderSchedule(){
   if(bodyEl) bodyEl.style.display='block';
 
   populateScheduleMonthDropdown_();
-  if(!schedMonthFilter||attParsed.monthList.indexOf(schedMonthFilter)<0) schedMonthFilter=attParsed.monthList[attParsed.monthList.length-1];
+  var schedMonths_=schedAvailableMonths_();
+  if(!schedMonthFilter||schedMonths_.indexOf(schedMonthFilter)<0) schedMonthFilter=schedMonths_[schedMonths_.length-1];
   var monthSel=document.getElementById('sched-month');
   if(monthSel) monthSel.value=schedMonthFilter;
 
@@ -6305,6 +6528,10 @@ function renderSchedule(){
         // Deliberately blank, not counted in any of the Day/Mid/Night/Off
         // tallies — there's no schedule fact to tally here either way.
         row+='<td><div class="sched-cell-inner" style="background:transparent;border:none" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · No schedule data (not yet joined)"></div></td>';
+      } else if(rec&&rec.__resigned){
+        // Roster explicitly marked "Resign" — shown literally as "Resign"
+        // (matching the Google Sheet), not counted toward Day/Mid/Night/Off.
+        row+='<td><div class="sched-cell-inner" style="background:rgba(229,57,53,0.14);color:#e53935;font-size:8.5px;font-weight:800;border:1.5px solid #e53935" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · Resigned">Resign</div></td>';
       } else if(rec&&rec.issueType==='OT_DAYOFF'){
         // OT (Day Off): the day's actual identity is still "Day Off" — the
         // agent just happened to come in anyway. Shows as OFF (not the
@@ -6390,6 +6617,8 @@ function buildScheduleReportHtml_(){
         row+='<td><div class="cell off" style="border-color:'+lt.color+';color:'+lt.color+'" title="'+esc(lt.full+(leave.note?(' — '+leave.note):''))+'">'+lt.short+'</div></td>';
       } else if(rec&&rec.__noSchedule){
         row+='<td><div class="cell" style="background:transparent" title="No schedule data (not yet joined)"></div></td>';
+      } else if(rec&&rec.__resigned){
+        row+='<td><div class="cell off" style="border-color:#e53935;color:#e53935;font-size:7px" title="Resigned">Resign</div></td>';
       } else if(rec&&rec.issueType==='OT_DAYOFF'){
         offCount++;
         row+='<td><div class="cell off" style="border-color:var(--purple);color:var(--purple)" title="'+esc('OT (Day Off)'+(rec.checkIn?(' In '+rec.checkIn):'')+(rec.checkOut?(' Out '+rec.checkOut):''))+'">OFF</div></td>';
