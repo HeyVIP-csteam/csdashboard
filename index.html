@@ -3474,7 +3474,7 @@ var ATT_ROSTER_LAYOUT_INR={
   nameIdx:1, psdIdx:2, dayStartIdx:5,
   shiftWords:{day:'Day',night:'Night',mid:'Mid'},
   leaveWords:{upl:'UPL',al:'ANNUAL',sl:'SICK',vacation:'ANNUAL','sick leave':'SICK','annual leave':'ANNUAL'},
-  offWords:['week off']
+  offWords:['week off','day off']
 };
 var ATT_ROSTER_LAYOUT_PKR={
   // CORRECTED: originally read as F=Day1 from an earlier fetch of the June
@@ -3486,7 +3486,7 @@ var ATT_ROSTER_LAYOUT_PKR={
   nameIdx:2, psdIdx:1, dayStartIdx:4,
   shiftWords:{day:'Day',night:'Night',mid:'Mid'},
   leaveWords:{upl:'UPL',al:'ANNUAL',sl:'SICK',vacation:'ANNUAL','sick leave':'SICK','annual leave':'ANNUAL'},
-  offWords:['week off']
+  offWords:['week off','day off']
 };
 var ATT_ROSTER_LAYOUT_PHP={
   // Confirmed against real raw cell data (April 2026 tab). Completely
@@ -3496,7 +3496,7 @@ var ATT_ROSTER_LAYOUT_PHP={
   nameIdx:2, psdIdx:1, dayStartIdx:4,
   shiftWords:{m:'Day',n:'Night'},
   leaveWords:{upl:'UPL',al:'ANNUAL',sl:'SICK'},
-  offWords:['off']
+  offWords:['off','day off','week off']
 };
 // Scans a month-tab's first few rows for a header cell that literally reads
 // like "1-Jul" / "01-Jul" (day 1 of THIS specific month) and returns its
@@ -3521,66 +3521,78 @@ function parseDutyRoster_(monthRowsMap,nameToKeyMap,layout){
   var out={shiftByAgentDay:{},leaveByAgentDay:{},weekOffByAgentDay:{},rosterAgentMonths:{},firstFilledDay:{},agentInfoByMonth:{},resignByAgentDay:{}};
   nameToKeyMap=nameToKeyMap||{};
   Object.keys(monthRowsMap||{}).forEach(function(monthKey){
-    var rows=monthRowsMap[monthKey];
-    if(!rows||!rows.length) return;
-    // Per-tab column detection — falls back to the region's static layout
-    // (layout.dayStartIdx, already a 0-based column index for Day 1) only
-    // if the header scan above doesn't find a recognizable date cell.
-    var detectedCol=detectDayOneCol_(rows,monthKey);
-    var day1ColIdx=(detectedCol!==null)?detectedCol:layout.dayStartIdx;
-    for(var r=0;r<rows.length;r++){
-      var row=rows[r]||[];
-      var name=String(row[layout.nameIdx]||'').trim();
-      if(!name) continue; // section-header rows leave the Name column blank
-      var psdRaw=String(row[layout.psdIdx]||'').trim();
-      var key=null;
-      if(psdRaw&&/\d/.test(psdRaw)){
-        key=normPsd_(psdRaw);
-      } else {
-        // No usable PSD-ID for this row — fall back to matching the real
-        // agent directory by name.
-        var byName=nameToKeyMap[normNameLoose_(name)];
-        if(byName) key=byName;
-      }
-      if(!key) continue; // couldn't match to a real agent either way — skip, don't guess
-      out.rosterAgentMonths[key+'||'+monthKey]=true;
-      // Remembers a display name/PSD-ID for this agent+month even if they
-      // never get a Days Present row in real Attendance for this month —
-      // schedBuildData_() uses this to add them to the visible agent list,
-      // since otherwise someone who ONLY exists in the Roster (not in CS
-      // Detail, not in any Attendance row this month) would never show up
-      // in the Schedule at all, no matter how much Roster data exists for them.
-      out.agentInfoByMonth[key+'||'+monthKey]={name:name,psdId:psdRaw||key};
-      var fkey=key+'||'+monthKey;
-      for(var day=1;day<=31;day++){
-        var colIdx=day1ColIdx+day-1;
-        var cellRaw=String(row[colIdx]||'').trim();
-        if(!cellRaw) continue; // blank cell — agent+month already marked present above, this specific day just has nothing
-        if(/resign/i.test(cellRaw)){
-          // From this exact day through the end of the month, mark every
-          // day as "Resign" — matches the Google Sheet literally (it's a
-          // real HR fact, not a missing-data gap that should quietly fall
-          // back to a generic OFF). Then stop reading the rest of this row.
-          for(var rd=day;rd<=31;rd++) out.resignByAgentDay[key+'||'+monthKey+'||'+rd]=true;
-          break;
+    try{
+      var rows=monthRowsMap[monthKey];
+      if(!rows||!rows.length) return;
+      // Per-tab column detection — falls back to the region's static layout
+      // (layout.dayStartIdx, already a 0-based column index for Day 1) only
+      // if the header scan above doesn't find a recognizable date cell.
+      var detectedCol=detectDayOneCol_(rows,monthKey);
+      var day1ColIdx=(detectedCol!==null)?detectedCol:layout.dayStartIdx;
+      for(var r=0;r<rows.length;r++){
+        // One malformed/unexpected row (a manual edit gone wrong, a stray
+        // merged cell, whatever) must never take down the whole month's
+        // worth of Roster data — let alone the rest of loadAll() — just
+        // because of ONE bad row. Skip that single row and keep going.
+        try{
+          var row=rows[r]||[];
+          var name=String(row[layout.nameIdx]||'').trim();
+          if(!name) continue; // section-header rows leave the Name column blank
+          var psdRaw=String(row[layout.psdIdx]||'').trim();
+          var key=null;
+          if(psdRaw&&/\d/.test(psdRaw)){
+            key=normPsd_(psdRaw);
+          } else {
+            // No usable PSD-ID for this row — fall back to matching the real
+            // agent directory by name.
+            var byName=nameToKeyMap[normNameLoose_(name)];
+            if(byName) key=byName;
+          }
+          if(!key) continue; // couldn't match to a real agent either way — skip, don't guess
+          out.rosterAgentMonths[key+'||'+monthKey]=true;
+          // Remembers a display name/PSD-ID for this agent+month even if they
+          // never get a Days Present row in real Attendance for this month —
+          // schedBuildData_() uses this to add them to the visible agent list,
+          // since otherwise someone who ONLY exists in the Roster (not in CS
+          // Detail, not in any Attendance row this month) would never show up
+          // in the Schedule at all, no matter how much Roster data exists for them.
+          out.agentInfoByMonth[key+'||'+monthKey]={name:name,psdId:psdRaw||key};
+          var fkey=key+'||'+monthKey;
+          for(var day=1;day<=31;day++){
+            var colIdx=day1ColIdx+day-1;
+            var cellRaw=String(row[colIdx]||'').trim();
+            if(!cellRaw) continue; // blank cell — agent+month already marked present above, this specific day just has nothing
+            if(/resign/i.test(cellRaw)){
+              // From this exact day through the end of the month, mark every
+              // day as "Resign" — matches the Google Sheet literally (it's a
+              // real HR fact, not a missing-data gap that should quietly fall
+              // back to a generic OFF). Then stop reading the rest of this row.
+              for(var rd=day;rd<=31;rd++) out.resignByAgentDay[key+'||'+monthKey+'||'+rd]=true;
+              break;
+            }
+            var norm=cellRaw.toLowerCase();
+            var dayKey=key+'||'+monthKey+'||'+day;
+            if(layout.shiftWords.hasOwnProperty(norm)){
+              out.shiftByAgentDay[dayKey]={shift:layout.shiftWords[norm],psdId:psdRaw||key,name:name,month:monthKey,day:day};
+              if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
+            } else if(layout.leaveWords.hasOwnProperty(norm)){
+              out.leaveByAgentDay[dayKey]={type:layout.leaveWords[norm],note:'',psdId:psdRaw||key,name:name};
+              if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
+            } else if(layout.offWords.indexOf(norm)>=0){
+              // Tracked explicitly (not just skipped) so it's excluded from the
+              // "blank = not yet joined" logic in schedBuildData_() — this is a
+              // real, explicit day-off decision, not a missing-data gap.
+              out.weekOffByAgentDay[dayKey]=true;
+              if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
+            }
+            // anything else unrecognized: intentionally no entry.
+          }
+        }catch(rowErr){
+          console.warn('parseDutyRoster_: skipped one malformed row',monthKey,r,rowErr);
         }
-        var norm=cellRaw.toLowerCase();
-        var dayKey=key+'||'+monthKey+'||'+day;
-        if(layout.shiftWords.hasOwnProperty(norm)){
-          out.shiftByAgentDay[dayKey]={shift:layout.shiftWords[norm],psdId:psdRaw||key,name:name,month:monthKey,day:day};
-          if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
-        } else if(layout.leaveWords.hasOwnProperty(norm)){
-          out.leaveByAgentDay[dayKey]={type:layout.leaveWords[norm],note:'',psdId:psdRaw||key,name:name};
-          if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
-        } else if(layout.offWords.indexOf(norm)>=0){
-          // Tracked explicitly (not just skipped) so it's excluded from the
-          // "blank = not yet joined" logic in schedBuildData_() — this is a
-          // real, explicit day-off decision, not a missing-data gap.
-          out.weekOffByAgentDay[dayKey]=true;
-          if(out.firstFilledDay[fkey]===undefined||day<out.firstFilledDay[fkey]) out.firstFilledDay[fkey]=day;
-        }
-        // anything else unrecognized: intentionally no entry.
       }
+    }catch(monthErr){
+      console.warn('parseDutyRoster_: skipped month',monthKey,'entirely due to an error — other months are unaffected',monthErr);
     }
   });
   return out;
@@ -6900,6 +6912,75 @@ document.addEventListener('DOMContentLoaded',function(){
 // Returns null if there's no attendance data at all for this region/agent
 // (e.g. Outsource agents, or PKR/PHP before their sheet is wired up) so the
 // caller can just skip rendering the section instead of showing empty stats.
+// ── SHARED: Duty-days / leave-days for a single agent over a month range ───
+// Used by the Agent Audit Profile's "在岗与请假" panel. Deliberately mirrors
+// schedBuildDayTotalsFoot_()'s per-day classification rules EXACTLY (Roster
+// is the primary source, Attendance only fills a day Roster has nothing
+// for) — if that logic ever changes, this needs the same change, or the
+// Agent Audit Profile and Schedule page will start disagreeing with each
+// other about how many days someone was on duty.
+//
+// "On duty" = worked (a real shift) + Day Off (a real, roster-confirmed
+// rest day — including a day someone came in anyway and submitted OT
+// (Day Off), since that day's underlying identity is still "Day Off", same
+// as how the Schedule grid itself displays it). Leave days (UPL/Sick/
+// Annual), pre-joining days, and resigned days are excluded entirely — none
+// of those are a "duty" fact one way or the other.
+function computeAgentDutyDays_(agentKey,agentPsdId,monthFilter){
+  var months=expandMonths(monthFilter)||ATT_MO_ORDER;
+  var monthSet={}; months.forEach(function(m){ monthSet[m]=true; });
+  var psdKey=normPsd_(agentPsdId);
+  // Index this agent's real Attendance rows by "month-day" once, up front —
+  // avoids an O(days × rows) linear scan repeated for every single day below.
+  var attByMonthDay={};
+  (attParsed.rowsRaw||[]).forEach(function(r){
+    if(normPsd_(r.psdId)!==psdKey) return;
+    if(!monthSet[r.month]) return;
+    attByMonthDay[r.month+'-'+r.day]=r;
+  });
+  var workDays=0,dayOffDays=0;
+  months.forEach(function(month){
+    var daysInMonth=ATT_MO_DAYS_2026[ATT_MO_IDX[month]]||30;
+    var presentInRoster=dutyRosterParsed.rosterAgentMonths[agentKey+'||'+month];
+    var firstFilledDay=dutyRosterParsed.firstFilledDay[agentKey+'||'+month];
+    for(var d=1;d<=daysInMonth;d++){
+      var rosterKey=agentKey+'||'+month+'||'+d;
+      if(attLeaveParsed.byAgentDay[psdKey+'||'+month+'||'+d]) continue; // UPL/Sick/Annual — not a duty fact
+      if(dutyRosterParsed.resignByAgentDay[rosterKey]) continue; // resigned by this point
+      if(dutyRosterParsed.shiftByAgentDay[rosterKey]){ workDays++; continue; }
+      if(dutyRosterParsed.weekOffByAgentDay[rosterKey]){ dayOffDays++; continue; } // real Day Off, whether or not OT was also submitted that day
+      if(presentInRoster&&firstFilledDay!==undefined&&d<firstFilledDay) continue; // not yet joined
+      if(attByMonthDay[month+'-'+d]){ workDays++; continue; } // Roster has nothing here — fall back to a real Attendance check-in
+      // else: no data anywhere for this day — not counted either way
+    }
+  });
+  return {onDuty:workDays+dayOffDays,workDays:workDays,dayOffDays:dayOffDays};
+}
+// Counts UPL / Sick / Annual leave days for one agent over a month range.
+// attLeaveParsed.byAgentDay already merges BOTH real Leave Request
+// submissions and Roster-sheet leave markings (see loadAll()) — nothing
+// further to combine here, just filter down to this agent + these months
+// and tally by type.
+function computeAgentLeaveDays_(agentPsdId,monthFilter){
+  var months=expandMonths(monthFilter)||ATT_MO_ORDER;
+  var monthSet={}; months.forEach(function(m){ monthSet[m]=true; });
+  var psdKey=normPsd_(agentPsdId);
+  var counts={UPL:0,SICK:0,ANNUAL:0};
+  Object.keys(attLeaveParsed.byAgentDay).forEach(function(k){
+    var parts=k.split('||');
+    if(parts[0]!==psdKey||!monthSet[parts[1]]) return;
+    var entry=attLeaveParsed.byAgentDay[k];
+    if(entry&&counts.hasOwnProperty(entry.type)) counts[entry.type]++;
+  });
+  return counts;
+}
+// Shared "period label" text (e.g. "Year to Date" / "H1" / "Jul") for
+// whichever month-filter value the Agent Audit Profile's dropdown is on —
+// used by both the Attendance panel and the Duty & Leave panel so their
+// headers always describe the exact same period in the exact same words.
+function attPeriodLbl_(monthFilter,isZh){
+  return monthFilter==='all'?(isZh?'全年至今':'Year to Date'):(monthFilter==='H1'?'H1':(monthFilter==='H2'?'H2':monthFilter));
+}
 function attGetAgentSummary_(identity,monthFilter){
   if(!attParsed||!attParsed.monthList||!attParsed.monthList.length) return null;
   var list=attAggregateForFilter_(attParsed,monthFilter||'all');
@@ -8253,7 +8334,7 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
     var attRemarksList=attFilterRemarks_(attParsed,apMonthFilter,normPsd_(identity.psdId||attSummary.psdId));
     var attRemarksHtml=attRemarksList.length?
       '<ul class="ap-cell-list" style="padding:0 16px 14px">'+attRemarksList.map(function(r){return '<li><b>'+r.date+':</b> '+r.remark+'</li>';}).join('')+'</ul>':'';
-    var attPeriodLbl=apMonthFilter==='all'?(isZh?'全年至今':'Year to Date'):(apMonthFilter==='H1'?'H1':(apMonthFilter==='H2'?'H2':apMonthFilter));
+    var attPeriodLbl=attPeriodLbl_(apMonthFilter,isZh);
     attSection='<div class="panel" style="margin-bottom:18px"><div class="ph"><div class="ph-t">🕒 '+(isZh?'考勤总览（'+attPeriodLbl+'）':'Attendance ('+attPeriodLbl+')')+'</div></div>'+
       '<div class="kpi-grid g4" style="padding:14px 16px 16px">'+
         '<div class="kpi c-teal"><div class="kpi-lbl">'+(isZh?'出勤率':'Attendance Rate')+'</div><div class="kpi-val">'+(attSummary.attendanceRate*100).toFixed(0)+'%</div><div class="kpi-d">'+attSummary.daysPresent+'/'+attSummary.daysInMonth+' '+(isZh?'天':'days')+'</div></div>'+
@@ -8265,7 +8346,34 @@ function renderAgentProfileModal(identity,slaAgg,qaEntries,profile){
     '</div>';
   }
 
-  body.innerHTML=header+kpi+chartPanel+attSection+qaSection;
+  // Duty & Leave overview — Internal CS only (same population as attSection
+  // above), but NOT gated behind attSummary existing: this panel's "on duty"
+  // figure is Roster-primary (see computeAgentDutyDays_), so it can have
+  // real data even for a region/period where Attendance itself is empty —
+  // exactly the situation the whole Roster-as-primary-source change was
+  // built for. Instead it's gated on having ANY data of its own, which
+  // naturally hides it for Outsource agents (no Roster/Attendance rows
+  // exist for them under this key either way) without needing a separate
+  // team-membership check.
+  var dutySection='';
+  if(identity.psdId){
+    var agentKeyForDuty=normPsd_(identity.psdId);
+    var dutyDays=computeAgentDutyDays_(agentKeyForDuty,identity.psdId,apMonthFilter);
+    var leaveDays=computeAgentLeaveDays_(identity.psdId,apMonthFilter);
+    if(dutyDays.onDuty>0||leaveDays.UPL>0||leaveDays.SICK>0||leaveDays.ANNUAL>0){
+      var dutyPeriodLbl=attPeriodLbl_(apMonthFilter,isZh);
+      dutySection='<div class="panel" style="margin-bottom:18px"><div class="ph"><div class="ph-t">📅 '+(isZh?'在岗与请假总览（'+dutyPeriodLbl+'）':'Duty & Leave Overview ('+dutyPeriodLbl+')')+'</div></div>'+
+        '<div class="kpi-grid g4" style="padding:14px 16px 16px">'+
+          '<div class="kpi c-teal"><div class="kpi-lbl">'+(isZh?'在岗天数':'Days On Duty')+'</div><div class="kpi-val">'+dutyDays.onDuty+'</div><div class="kpi-d">'+(isZh?'实际上班 ':'')+dutyDays.workDays+(isZh?'天 · Day Off ':' worked · ')+dutyDays.dayOffDays+(isZh?'天':' day off')+'</div></div>'+
+          '<div class="kpi" style="border-top-color:#ff9100"><div class="kpi-lbl">UPL</div><div class="kpi-val" style="color:#ff9100">'+leaveDays.UPL+'</div><div class="kpi-d">'+(isZh?'天':'days')+'</div></div>'+
+          '<div class="kpi" style="border-top-color:#ff4081"><div class="kpi-lbl">'+(isZh?'病假':'Sick Leave')+'</div><div class="kpi-val" style="color:#ff4081">'+leaveDays.SICK+'</div><div class="kpi-d">'+(isZh?'天':'days')+'</div></div>'+
+          '<div class="kpi" style="border-top-color:#00b0ff"><div class="kpi-lbl">'+(isZh?'年假':'Annual Leave')+'</div><div class="kpi-val" style="color:#00b0ff">'+leaveDays.ANNUAL+'</div><div class="kpi-d">'+(isZh?'天':'days')+'</div></div>'+
+        '</div>'+
+      '</div>';
+    }
+  }
+
+  body.innerHTML=header+kpi+chartPanel+attSection+dutySection+qaSection;
   overlay.classList.add('open');
 
   // Render the trend chart after the canvas exists in the DOM
