@@ -8572,6 +8572,79 @@ function closeAgentProfileModal(){
 // exact same DOM the user is looking at, so there's nothing extra to filter.
 // Shared by all three currencies (INR/PKR/PHP) since it's the same modal for
 // every region — no per-region wiring needed.
+// Rule-based, data-driven performance write-up for the HTML export — NOT a
+// live AI/LLM call (a downloaded static file has no way to call an API
+// without exposing credentials), but built the same way the Monthly
+// Operational Report's "Executive Summary" is: real numbers, computed at
+// export time, turned into plain-language sentences. Ranks this agent
+// against every other agent on the same team (Internal/Outsource) by total
+// chats and by FRT speed for the same month filter.
+function apBuildExportAnalysisPanel_(d,isZh){
+  var identity=d.identity, attSummary=d.attSummary, qaCount=(d.qaEntries||[]).length;
+  var dir=buildAgentDirectory();
+  var idKey=identity.key; // same key buildAgentDirectory() itself uses — do not recompute, or a mismatched formula could silently rank the wrong row
+  var peers=Object.values(dir).filter(function(a){ return a.team===identity.team; });
+  var ranked=peers.map(function(a){
+    var agg=aggregateAgentSLA(a,d.monthFilter);
+    return {key:a.key,name:a.name,chats:agg.totalChats,frt:agg.avgFrt};
+  }).filter(function(r){ return r.chats>0; });
+  ranked.sort(function(a,b){ return b.chats-a.chats; });
+  var chatRankIdx=ranked.findIndex(function(r){ return r.key===idKey; });
+  var frtRanked=ranked.filter(function(r){ return r.frt>0; }).slice().sort(function(a,b){ return a.frt-b.frt; });
+  var frtRankIdx=frtRanked.findIndex(function(r){ return r.key===idKey; });
+
+  var bits=[];
+  if(chatRankIdx>=0){
+    bits.push(isZh?
+      ('按接单量在 '+identity.team+' 团队中排名第 <b>'+(chatRankIdx+1)+'</b>（共 '+ranked.length+' 人）。'):
+      ('Ranks <b>#'+(chatRankIdx+1)+'</b> of '+ranked.length+' '+identity.team+' agents by total chats handled.'));
+  }
+  if(frtRankIdx>=0){
+    bits.push(isZh?
+      ('首响速度排名第 <b>'+(frtRankIdx+1)+'</b>（共 '+frtRanked.length+' 人，数字越小代表越快）。'):
+      ('Ranks <b>#'+(frtRankIdx+1)+'</b> of '+frtRanked.length+' by FRT speed (lower is faster).'));
+  }
+  if(attSummary){
+    var rate=attSummary.attendanceRate*100;
+    bits.push(isZh?
+      ('出勤率 '+rate.toFixed(0)+'%，'+(rate>=90?'处于健康水平。':(rate>=70?'略低于理想水平，建议关注。':'明显偏低，建议尽快跟进原因。'))):
+      ('Attendance rate is '+rate.toFixed(0)+'%, '+(rate>=90?'a healthy level.':(rate>=70?'somewhat below ideal — worth keeping an eye on.':'notably low — worth following up on the reason.'))));
+    var punc=attSummary.punctualityRate*100;
+    bits.push(isZh?
+      ('准点率 '+punc.toFixed(0)+'%'+(attSummary.lateCount>0?('，共 '+attSummary.lateCount+' 次迟到。'):'。')):
+      ('Punctuality rate is '+punc.toFixed(0)+'%'+(attSummary.lateCount>0?(', with '+attSummary.lateCount+' late check-in(s).'):'.')));
+  }
+  bits.push(isZh?
+    ('本期共有 <b>'+qaCount+'</b> 条 QA 错误记录'+(qaCount===0?'，表现良好。':qaCount<=3?'，处于可接受范围。':'，建议重点关注具体错误类型。')):
+    ('There '+(qaCount===1?'is':'are')+' <b>'+qaCount+'</b> QA error record(s) this period'+(qaCount===0?' — clean record.':qaCount<=3?', within an acceptable range.':' — worth reviewing the specific error types.')));
+
+  return '<div class="ap-export-ai-panel"><div class="ap-export-ai-title">'+(isZh?'表现分析（基于本次导出数据自动生成）':'Performance Analysis (auto-generated from this export\'s data)')+'</div>'+
+    '<div class="ap-export-ai-body">'+bits.join(' ')+'</div></div>';
+}
+
+// Bakes every card's drill-down (weekly SLA breakdown, Attendance Rate/
+// Punctuality/Early/Extra-Break formulas + day-level records, Days On Duty
+// monthly breakdown, UPL/Sick/Annual leave dates+remarks) into hidden
+// source divs, one per card kind. The export's own inline script (see
+// exportAgentProfileHtml_) copies whichever one was clicked into a real
+// popup overlay — same stacked-modal behavior as the live Agent Audit
+// Profile, but needing zero external dependencies since the content is
+// already pre-rendered here. Uses apBuildDetailHtmlForKind_ — the exact
+// same function the live popup calls — so the two can never disagree.
+function apBuildExportDetailDivs_(d,isZh){
+  var kinds=['totalChats','avgFrt','avgMrt','avgAht','avgCsat'];
+  if(d.attSummary) kinds=kinds.concat(['attendanceRate','punctualityRate','earlyCheckout','extraBreak']);
+  if(d.identity.psdId) kinds=kinds.concat(['daysOnDuty','upl','sick','annual']);
+  var out='';
+  kinds.forEach(function(kind){
+    var html=apBuildDetailHtmlForKind_(d,kind,isZh);
+    var t=AP_DETAIL_TITLES[kind];
+    var titleTxt=(t?(isZh?t.zh:t.en):'Detail').replace(/"/g,'&quot;');
+    var iconTxt=AP_DETAIL_ICONS[kind]||'📊';
+    out+='<div id="exp-detail-'+kind+'" class="exp-detail-src" data-title="'+titleTxt+'" data-icon="'+iconTxt+'" style="display:none">'+html+'</div>';
+  });
+  return out;
+}
 function exportAgentProfileHtml_(){
   var body=document.getElementById('ap-body');
   var titleEl=document.getElementById('ap-title-text');
@@ -8598,14 +8671,28 @@ function exportAgentProfileHtml_(){
       cloneCanvas.replaceWith(img);
     }
     // Strip interactive-only bits that can't do anything in a static file
-    // (avatar upload button, click-to-zoom / click handlers on cards, etc).
+    // (avatar upload button, click-to-zoom on the photo, etc) — EXCEPT the
+    // card drill-downs, which get rewired to the export's own popup below
+    // instead of being stripped.
     clone.querySelectorAll('.ap-avatar-upload-btn').forEach(function(el){ el.remove(); });
-    clone.querySelectorAll('[onclick]').forEach(function(el){ el.removeAttribute('onclick'); el.style.cursor='default'; });
+    var exportableKinds={totalChats:1,avgFrt:1,avgMrt:1,avgAht:1,avgCsat:1,attendanceRate:1,punctualityRate:1,earlyCheckout:1,extraBreak:1,daysOnDuty:1,upl:1,sick:1,annual:1};
+    clone.querySelectorAll('[onclick]').forEach(function(el){
+      var m=(el.getAttribute('onclick')||'').match(/apOpenCardDetail_\('([a-zA-Z]+)'\)/);
+      if(m&&exportableKinds[m[1]]){
+        el.setAttribute('onclick',"expOpenDetail_('"+m[1]+"')");
+      } else {
+        el.removeAttribute('onclick');
+        el.style.cursor='default';
+      }
+    });
 
     var css=(document.getElementsByTagName('style')[0]||{}).textContent||'';
     var monthSel=document.getElementById('ap-month-sel');
     var monthLbl=(monthSel&&monthSel.selectedOptions&&monthSel.selectedOptions[0])?monthSel.selectedOptions[0].textContent:apMonthFilter;
     var title=titleEl?titleEl.textContent:'Agent Profile';
+
+    var aiPanelHtml=apDetailData?apBuildExportAnalysisPanel_(apDetailData,isZh):'';
+    var detailDivsHtml=apDetailData?apBuildExportDetailDivs_(apDetailData,isZh):'';
 
     var html='<!DOCTYPE html><html lang="'+(isZh?'zh':'en')+'"><head><meta charset="utf-8">'+
       '<title>'+title+'</title>'+
@@ -8617,13 +8704,38 @@ function exportAgentProfileHtml_(){
         '.ap-export-wrap{max-width:1000px;margin:0 auto;background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:24px}'+
         '.ap-export-head{font-size:18px;font-weight:800;margin-bottom:4px}'+
         '.ap-export-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:20px}'+
+        '.ap-export-ai-panel{background:linear-gradient(135deg,rgba(155,127,244,0.12),rgba(0,176,255,0.08));border:1px solid var(--border2);border-radius:10px;padding:16px 18px;margin-bottom:18px}'+
+        '.ap-export-ai-title{font-size:13px;font-weight:800;margin-bottom:8px}'+
+        '.ap-export-ai-body{font-size:12.5px;line-height:1.75;color:var(--text)}'+
       '</style>'+
       '</head><body>'+
         '<div class="ap-export-wrap">'+
           '<div class="ap-export-head">🪪 '+title+'</div>'+
-          '<div class="ap-export-sub">'+(isZh?'月份范围：':'Month range: ')+monthLbl+' · '+currentRegion+' · '+(isZh?'生成时间：':'Generated: ')+new Date().toLocaleString()+'</div>'+
+          '<div class="ap-export-sub">'+(isZh?'月份范围：':'Month range: ')+monthLbl+' · '+currentRegion+' · '+(isZh?'生成时间：':'Generated: ')+new Date().toLocaleString()+
+            (Object.keys(exportableKinds).length?(' · '+(isZh?'点击下方任意卡片查看计算明细':'click any card below to see how it was calculated')):'')+
+          '</div>'+
+          aiPanelHtml+
           clone.innerHTML+
+          detailDivsHtml+
         '</div>'+
+        '<div class="zoom-overlay" id="exp-modal-overlay" onclick="if(event.target===this)expCloseDetail_()">'+
+          '<div class="zoom-box" style="width:min(720px,94vw);height:min(600px,88vh)">'+
+            '<div class="zoom-head"><div class="zoom-title"><span id="exp-modal-icon">📊</span><span id="exp-modal-title">Detail</span></div><button class="zoom-close" onclick="expCloseDetail_()">✕</button></div>'+
+            '<div class="zoom-body" id="exp-modal-body"></div>'+
+          '</div>'+
+        '</div>'+
+        '<script>'+
+          'function expOpenDetail_(kind){'+
+            'var src=document.getElementById("exp-detail-"+kind);'+
+            'if(!src)return;'+
+            'document.getElementById("exp-modal-body").innerHTML=src.innerHTML;'+
+            'document.getElementById("exp-modal-title").textContent=src.getAttribute("data-title")||"Detail";'+
+            'document.getElementById("exp-modal-icon").textContent=src.getAttribute("data-icon")||"\ud83d\udcca";'+
+            'document.getElementById("exp-modal-overlay").classList.add("open");'+
+          '}'+
+          'function expCloseDetail_(){ document.getElementById("exp-modal-overlay").classList.remove("open"); }'+
+          'document.addEventListener("keydown",function(e){ if(e.key==="Escape") expCloseDetail_(); });'+
+        '<\/script>'+
       '</body></html>';
 
     var agentName=(title.split(/—|-/)[0]||'Agent').trim().replace(/[^a-z0-9]+/gi,'_')||'Agent';
@@ -8660,6 +8772,35 @@ var AP_DETAIL_TITLES={
 };
 var AP_DETAIL_ICONS={totalChats:'💬',avgFrt:'⚡',avgMrt:'⚡',avgAht:'⏱️',avgCsat:'😊',attendanceRate:'🕒',punctualityRate:'⏰',earlyCheckout:'🚪',extraBreak:'☕',daysOnDuty:'📅',upl:'📅',sick:'📅',annual:'📅'};
 
+// Single source of truth for "given a card kind, what HTML explains it" —
+// used by BOTH the live popup (apOpenCardDetail_) and the HTML export
+// (apBuildExportDetailDivs_), so the two can never show different numbers
+// or different formula text for the same card.
+function apBuildDetailHtmlForKind_(d,kind,isZh){
+  switch(kind){
+    case 'totalChats': return apRenderSlaDetail_(d,'chats',isZh);
+    case 'avgFrt': return apRenderSlaDetail_(d,'frt',isZh);
+    case 'avgMrt': return apRenderSlaDetail_(d,'mrt',isZh);
+    case 'avgAht': return apRenderSlaDetail_(d,'aht',isZh);
+    case 'avgCsat': return apRenderSlaDetail_(d,'csat',isZh);
+    case 'attendanceRate': return apRenderAttendanceRateDetail_(d,isZh);
+    case 'punctualityRate': return apRenderDayFlagDetail_(d,isZh,'isLate','lateMin',
+        isZh?'准点率 = (出勤天数 − 迟到天数) ÷ 出勤天数。下面是所有被记为"迟到"的具体日期：':
+             'Punctuality Rate = (days present − late days) ÷ days present. Every date flagged as late is listed below:',
+        isZh?'迟到(分钟)':'Late (min)');
+    case 'earlyCheckout': return apRenderDayFlagDetail_(d,isZh,'isEarly','earlyMin',
+        isZh?'下面是所有被记为"早退"的具体日期（签退时间早于排班要求）：':
+             'Every date flagged as an early check-out (checked out before the scheduled end time) is listed below:',
+        isZh?'早退(分钟)':'Early (min)');
+    case 'extraBreak': return apRenderDayFlagDetail_(d,isZh,'isExtraBreakDay','extraBreakMin',
+        isZh?'下面是所有休息时间超过 90 分钟上限的具体日期：':
+             'Every date where total break time went over the 90-minute allowance is listed below:',
+        isZh?'超出(分钟)':'Over (min)');
+    case 'daysOnDuty': case 'upl': case 'sick': case 'annual':
+      return apRenderDutyDetail_(d,isZh,kind);
+    default: return '';
+  }
+}
 function apOpenCardDetail_(kind){
   // QA Errors already has its own full list right below in the profile —
   // no need to duplicate it in a popup, just scroll to it.
@@ -8672,30 +8813,7 @@ function apOpenCardDetail_(kind){
   if(!apDetailData||!apDetailData.identity) return;
   var isZh=lang==='zh';
   var d=apDetailData;
-  var bodyHtml;
-  switch(kind){
-    case 'totalChats': bodyHtml=apRenderSlaDetail_(d,'chats',isZh); break;
-    case 'avgFrt': bodyHtml=apRenderSlaDetail_(d,'frt',isZh); break;
-    case 'avgMrt': bodyHtml=apRenderSlaDetail_(d,'mrt',isZh); break;
-    case 'avgAht': bodyHtml=apRenderSlaDetail_(d,'aht',isZh); break;
-    case 'avgCsat': bodyHtml=apRenderSlaDetail_(d,'csat',isZh); break;
-    case 'attendanceRate': bodyHtml=apRenderAttendanceRateDetail_(d,isZh); break;
-    case 'punctualityRate': bodyHtml=apRenderDayFlagDetail_(d,isZh,'isLate','lateMin',
-        isZh?'准点率 = (出勤天数 − 迟到天数) ÷ 出勤天数。下面是所有被记为"迟到"的具体日期：':
-             'Punctuality Rate = (days present − late days) ÷ days present. Every date flagged as late is listed below:',
-        isZh?'迟到(分钟)':'Late (min)'); break;
-    case 'earlyCheckout': bodyHtml=apRenderDayFlagDetail_(d,isZh,'isEarly','earlyMin',
-        isZh?'下面是所有被记为"早退"的具体日期（签退时间早于排班要求）：':
-             'Every date flagged as an early check-out (checked out before the scheduled end time) is listed below:',
-        isZh?'早退(分钟)':'Early (min)'); break;
-    case 'extraBreak': bodyHtml=apRenderDayFlagDetail_(d,isZh,'isExtraBreakDay','extraBreakMin',
-        isZh?'下面是所有休息时间超过 90 分钟上限的具体日期：':
-             'Every date where total break time went over the 90-minute allowance is listed below:',
-        isZh?'超出(分钟)':'Over (min)'); break;
-    case 'daysOnDuty': case 'upl': case 'sick': case 'annual':
-      bodyHtml=apRenderDutyDetail_(d,isZh,kind); break;
-    default: bodyHtml='';
-  }
+  var bodyHtml=apBuildDetailHtmlForKind_(d,kind,isZh);
   var t=AP_DETAIL_TITLES[kind];
   document.getElementById('ap-detail-icon').textContent=AP_DETAIL_ICONS[kind]||'📊';
   document.getElementById('ap-detail-title').textContent=t?(isZh?t.zh:t.en):'Detail';
