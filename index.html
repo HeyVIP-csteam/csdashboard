@@ -198,8 +198,23 @@ canvas{max-height:200px}
 .sched-sum-first{border-left:2px solid var(--border2)}
 .sched-sum-day{color:var(--teal)}
 .sched-sum-night{color:var(--purple)}
+/* Day-column highlight (click a date header to toggle — see
+   schedToggleDayHighlight_). Background lightening on every cell in the
+   column, plus a "light beam" pair of vertical lines running the full
+   height of the table down both edges of that column. */
+.sched-daycol-hdr:hover{background:rgba(255,255,255,0.06)}
+td[data-day].sched-day-highlight{background:rgba(255,255,255,0.07) !important;position:relative}
+th[data-day].sched-day-highlight{background:rgba(255,255,255,0.07) !important}
+td[data-day].sched-day-highlight::before,th[data-day].sched-day-highlight::before,
+td[data-day].sched-day-highlight::after,th[data-day].sched-day-highlight::after{
+  content:'';position:absolute;top:0;bottom:0;width:2px;background:var(--teal);box-shadow:0 0 6px var(--teal);z-index:1;pointer-events:none;
+}
+td[data-day].sched-day-highlight::before,th[data-day].sched-day-highlight::before{left:0}
+td[data-day].sched-day-highlight::after,th[data-day].sched-day-highlight::after{right:0}
 .sched-sum-mid{color:var(--amber)}
 .sched-sum-off{color:var(--muted)}
+.sched-foot-row td{background:var(--panel);padding:7px 8px !important;border-top:1px solid var(--border2)}
+.sched-foot-row:first-child td{border-top:2px solid var(--border2)}
 .dt{width:100%;border-collapse:collapse}
 .dt th{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:8px 14px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;white-space:nowrap}
 .dt td{padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:11px;font-family:var(--mono);white-space:nowrap;vertical-align:middle}
@@ -481,13 +496,13 @@ body.light select option{background:#ffffff;color:#0c1e35}
   <div class="nav-item active" onclick="showPage('overview',this)"><div class="nav-dot" style="background:#00e676"></div><span data-i18n="overview">Overview</span></div>
   <div class="nav-sec" data-i18n="analytics">Analytics</div>
   <div class="nav-item" onclick="showPage('daily',this)"><div class="nav-dot" style="background:#00e676"></div><span data-i18n="dailyReport">Daily Report</span></div>
-  <div class="nav-item" onclick="showPage('peaks',this)"><div class="nav-dot" style="background:#ff9100"></div><span>Peaks & Valleys</span></div>
-  <div class="nav-item" onclick="showPage('auto',this)"><div class="nav-dot" style="background:#9b7ff4"></div><span>Automation</span></div>
+  <div class="nav-item" onclick="showPage('peaks',this)"><div class="nav-dot" style="background:#ff9100"></div><span data-i18n="peaksValleys">Peaks & Valleys</span></div>
+  <div class="nav-item" onclick="showPage('auto',this)"><div class="nav-dot" style="background:#9b7ff4"></div><span data-i18n="automation">Automation</span></div>
   <div class="nav-sec" data-i18n="performance">Agent Performance</div>
-  <div class="nav-item" onclick="showPage('sla',this)"><div class="nav-dot" style="background:#00e676"></div><span>SLA Metrics</span></div>
+  <div class="nav-item" onclick="showPage('sla',this)"><div class="nav-dot" style="background:#00e676"></div><span data-i18n="slaMetrics">SLA Metrics</span></div>
   <div class="nav-item" onclick="showPage('qa',this)"><div class="nav-dot" style="background:#ff4081"></div><span data-i18n="qaErrors">QA Errors</span></div>
-  <div class="nav-item" onclick="showPage('attendance',this)"><div class="nav-dot" style="background:#2dd4bf"></div><span>Attendance</span></div>
-  <div class="nav-item" onclick="showPage('schedule',this)"><div class="nav-dot" style="background:#facc15"></div><span>Schedule</span></div>
+  <div class="nav-item" onclick="showPage('attendance',this)"><div class="nav-dot" style="background:#2dd4bf"></div><span data-i18n="attendance">Attendance</span></div>
+  <div class="nav-item" onclick="showPage('schedule',this)"><div class="nav-dot" style="background:#facc15"></div><span data-i18n="schedule">Schedule</span></div>
   <div class="nav-sec" data-i18n="auditSec">Audit</div>
   <div class="nav-item" onclick="showAuditDomain('agentbot',this)"><div class="nav-dot" style="background:#9b7ff4"></div><span data-i18n="auditAgentBot">Agent & Bot</span></div>
   <div class="nav-item" onclick="showAuditDomain('agentprofile',this)"><div class="nav-dot" style="background:#ffd54f"></div><span data-i18n="auditAgentProfile">Agent Audit Profile</span></div>
@@ -982,35 +997,35 @@ body.light select option{background:#ffffff;color:#0c1e35}
 
       <div id="att-body">
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-          <div class="kpi c-teal"><div class="kpi-lbl">Attendance Rate</div><div class="kpi-val" id="att-attrate">-</div><div class="kpi-d" id="att-attrate-d">Days present / days in month</div></div>
-          <div class="kpi c-green"><div class="kpi-lbl">Punctuality Rate</div><div class="kpi-val" id="att-punc">-</div><div class="kpi-d" id="att-punc-d">On-time / days present</div></div>
-          <div class="kpi c-purple"><div class="kpi-lbl">Avg Work Duration</div><div class="kpi-val" id="att-avgwork">-</div><div class="kpi-d">Per day present</div></div>
-          <div class="kpi c-amber"><div class="kpi-lbl">Days Off (Total)</div><div class="kpi-val" id="att-off">-</div><div class="kpi-d">6/month entitled -- not "absent"</div></div>
+          <div class="kpi c-teal"><div class="kpi-lbl" data-i18n="attRate">Attendance Rate</div><div class="kpi-val" id="att-attrate">-</div><div class="kpi-d" id="att-attrate-d" data-i18n="attRateD">Days present / days in month</div></div>
+          <div class="kpi c-green"><div class="kpi-lbl" data-i18n="attPunc">Punctuality Rate</div><div class="kpi-val" id="att-punc">-</div><div class="kpi-d" id="att-punc-d" data-i18n="attPuncD">On-time / days present</div></div>
+          <div class="kpi c-purple"><div class="kpi-lbl" data-i18n="attAvgWork">Avg Work Duration</div><div class="kpi-val" id="att-avgwork">-</div><div class="kpi-d" data-i18n="attAvgWorkD">Per day present</div></div>
+          <div class="kpi c-amber"><div class="kpi-lbl" data-i18n="attDaysOff">Days Off (Total)</div><div class="kpi-val" id="att-off">-</div><div class="kpi-d" data-i18n="attDaysOffD">6/month entitled -- not "absent"</div></div>
         </div>
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
-          <div class="kpi c-amber"><div class="kpi-lbl">Late Check-In</div><div class="kpi-val" id="att-late">-</div><div class="kpi-d" id="att-late-d">- min total</div></div>
-          <div class="kpi c-red"><div class="kpi-lbl">Early Check-Out</div><div class="kpi-val" id="att-early">-</div><div class="kpi-d" id="att-early-d">- min total</div></div>
-          <div class="kpi c-red"><div class="kpi-lbl">Extra Break (over 90min/day)</div><div class="kpi-val" id="att-extra">-</div><div class="kpi-d" id="att-extra-d">- min total over allowance</div></div>
-          <div class="kpi c-red"><div class="kpi-lbl">⚠️ Anomaly (Dup. Check-In / Long Shift)</div><div class="kpi-val" id="att-anomaly">-</div><div class="kpi-d" id="att-anomaly-d">2+ punches same day, or duty over 14h</div></div>
-          <div class="kpi c-purple"><div class="kpi-lbl">🐞 Issue Day (Submitted)</div><div class="kpi-val" id="att-otdayoff">-</div><div class="kpi-d" id="att-issueday-d">OT day-off counts as present; effect varies by type</div></div>
+          <div class="kpi c-amber"><div class="kpi-lbl" data-i18n="attLateIn">Late Check-In</div><div class="kpi-val" id="att-late">-</div><div class="kpi-d" id="att-late-d">- min total</div></div>
+          <div class="kpi c-red"><div class="kpi-lbl" data-i18n="attEarlyOut">Early Check-Out</div><div class="kpi-val" id="att-early">-</div><div class="kpi-d" id="att-early-d">- min total</div></div>
+          <div class="kpi c-red"><div class="kpi-lbl" data-i18n="attExtraBreak">Extra Break (over 90min/day)</div><div class="kpi-val" id="att-extra">-</div><div class="kpi-d" id="att-extra-d">- min total over allowance</div></div>
+          <div class="kpi c-red"><div class="kpi-lbl">⚠️ <span data-i18n="attAnomaly">Anomaly (Dup. Check-In / Long Shift)</span></div><div class="kpi-val" id="att-anomaly">-</div><div class="kpi-d" id="att-anomaly-d" data-i18n="attAnomalyD">2+ punches same day, or duty over 14h</div></div>
+          <div class="kpi c-purple"><div class="kpi-lbl">🐞 <span data-i18n="attIssueDay">Issue Day (Submitted)</span></div><div class="kpi-val" id="att-otdayoff">-</div><div class="kpi-d" id="att-issueday-d" data-i18n="attIssueDayD">OT day-off counts as present; effect varies by type</div></div>
         </div>
 
         <div class="panel" style="margin-top:14px">
           <div class="ph" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-            <div class="ph-t">Attendance -- Internal CS</div>
+            <div class="ph-t" data-i18n="attTableTitle">Attendance -- Internal CS</div>
             <input id="att-search" type="text" placeholder="Search name or PSD-ID..." oninput="renderAttendanceTable()" style="background:var(--bg);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:6px 10px;border-radius:6px;width:180px;font-family:var(--font)">
           </div>
           <div style="overflow-x:auto">
             <table class="dt" id="att-tbl">
               <thead><tr>
-                <th data-key="psdId">PSD-ID</th><th data-key="name">Name</th>
-                <th data-key="daysPresent">Days Present</th><th data-key="daysOff">Days Off</th><th data-key="attendanceRate">Attendance %</th>
-                <th data-key="lateCount">Late (count)</th><th data-key="lateMinTotal">Late (min)</th>
-                <th data-key="earlyCount">Early Out (count)</th><th data-key="earlyMinTotal">Early Out (min)</th>
-                <th data-key="extraBreakDays">Extra Break (days)</th><th data-key="extraBreakMinTotal">Extra Break (min)</th>
-                <th data-key="shortBreakCountTotal">Short Break (count)</th><th data-key="avgWorkDurationMin">Avg Work</th>
-                <th data-key="anomalyDays">⚠️ Anomaly</th>
-                <th data-key="remarkCount">Remarks</th>
+                <th data-key="psdId" data-i18n="psdId">PSD-ID</th><th data-key="name" data-i18n="csName">Name</th>
+                <th data-key="daysPresent" data-i18n="attDaysPresent">Days Present</th><th data-key="daysOff" data-i18n="attDaysOffCol">Days Off</th><th data-key="attendanceRate" data-i18n="attRatePct">Attendance %</th>
+                <th data-key="lateCount" data-i18n="attLateCount">Late (count)</th><th data-key="lateMinTotal" data-i18n="attLateMin">Late (min)</th>
+                <th data-key="earlyCount" data-i18n="attEarlyCount">Early Out (count)</th><th data-key="earlyMinTotal" data-i18n="attEarlyMin">Early Out (min)</th>
+                <th data-key="extraBreakDays" data-i18n="attExtraBreakDays">Extra Break (days)</th><th data-key="extraBreakMinTotal" data-i18n="attExtraBreakMin">Extra Break (min)</th>
+                <th data-key="shortBreakCountTotal" data-i18n="attShortBreak">Short Break (count)</th><th data-key="avgWorkDurationMin" data-i18n="attAvgWorkCol">Avg Work</th>
+                <th data-key="anomalyDays">⚠️ <span data-i18n="attAnomalyCol">Anomaly</span></th>
+                <th data-key="remarkCount" data-i18n="attRemarksCol">Remarks</th>
               </tr></thead>
               <tbody id="att-body-tbl"></tbody>
             </table>
@@ -1022,14 +1037,14 @@ body.light select option{background:#ffffff;color:#0c1e35}
              a specific agent is picked in the Agent dropdown above. -->
         <div class="panel" style="margin-top:14px;border-left:3px solid var(--teal)">
           <div class="ph" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-            <div class="ph-t">📅 Daily Records</div>
+            <div class="ph-t">📅 <span data-i18n="attDailyRecords">Daily Records</span></div>
             <span class="ph-tag" id="att-daily-count">—</span>
           </div>
           <div style="overflow:auto;max-height:420px">
             <table class="dt" id="att-daily-tbl">
               <thead><tr>
-                <th>Date</th><th>Shift</th><th>Check In</th><th>Late Check-In</th><th>Check Out</th><th>Early Check-Out</th>
-                <th>Work Duration</th><th>Total Break</th><th>Remark</th>
+                <th data-i18n="attDate">Date</th><th data-i18n="attShift">Shift</th><th data-i18n="attCheckIn">Check In</th><th data-i18n="attLateCheckIn">Late Check-In</th><th data-i18n="attCheckOut">Check Out</th><th data-i18n="attEarlyCheckOut">Early Check-Out</th>
+                <th data-i18n="attWorkDuration">Work Duration</th><th data-i18n="attTotalBreak">Total Break</th><th data-i18n="attRemark">Remark</th>
               </tr></thead>
               <tbody id="att-daily-body"></tbody>
             </table>
@@ -1043,33 +1058,33 @@ body.light select option{background:#ffffff;color:#0c1e35}
          a day with NO row = Day Off. Internal CS only, same as Attendance. -->
     <div class="page" id="page-schedule">
       <div style="display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 16px;flex-wrap:wrap">
-        <div class="filter-group"><span class="filter-lbl">Month</span>
+        <div class="filter-group"><span class="filter-lbl" data-i18n="month">Month</span>
         <select class="fsel" id="sched-month" onchange="applyScheduleFilters()"></select></div>
         <div class="filter-div"></div>
         <input id="sched-search" type="text" placeholder="Search name or PSD-ID..." oninput="renderSchedule()" style="background:var(--bg);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:6px 10px;border-radius:6px;width:180px;font-family:var(--font)">
-        <button class="ref-btn" onclick="exportSchedule()" title="Export the current month/agent filter as a standalone HTML report"><i class="fa-solid fa-download"></i> Export Report</button>
-        <button class="ref-btn" onclick="openLeaveSubmitModal()" title="Submit a UPL / Sick / Annual leave request — shown as a label on the schedule only"><i class="fa-solid fa-umbrella-beach"></i> Submit Leave</button>
+        <button class="ref-btn" onclick="exportSchedule()" title="Export the current month/agent filter as a standalone HTML report"><i class="fa-solid fa-download"></i> <span data-i18n="schedExportReport">Export Report</span></button>
+        <button class="ref-btn" onclick="openLeaveSubmitModal()" title="Submit a UPL / Sick / Annual leave request — shown as a label on the schedule only"><i class="fa-solid fa-umbrella-beach"></i> <span data-i18n="schedSubmitLeave">Submit Leave</span></button>
         <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:10px;color:var(--muted);font-family:var(--mono);flex-wrap:wrap">
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--teal);vertical-align:middle;margin-right:4px"></span>Day</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--amber);vertical-align:middle;margin-right:4px"></span>Mid</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--purple);vertical-align:middle;margin-right:4px"></span>Night</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--dim);vertical-align:middle;margin-right:4px"></span>Off</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--red);vertical-align:middle;margin-right:4px"></span>Late/Early</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--purple);vertical-align:middle;margin-right:4px"></span>OT (Day Off)</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--amber);vertical-align:middle;margin-right:4px"></span>System Issue</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--teal);vertical-align:middle;margin-right:4px"></span>Extra Break (2h)</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid #ff9100;vertical-align:middle;margin-right:4px"></span>UPL</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid #ff4081;vertical-align:middle;margin-right:4px"></span>Sick</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid #00b0ff;vertical-align:middle;margin-right:4px"></span>Annual</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--teal);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedDay">Day</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--amber);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedMid">Mid</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--purple);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedNight">Night</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--dim);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedOff">Off</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--red);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedLateEarly">Late/Early</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--purple);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedOtDayOff">OT (Day Off)</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--amber);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedSystemIssue">System Issue</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid var(--teal);vertical-align:middle;margin-right:4px"></span><span data-i18n="schedExtraBreak">Extra Break (2h)</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid #ff9100;vertical-align:middle;margin-right:4px"></span><span data-i18n="schedUpl">UPL</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid #ff4081;vertical-align:middle;margin-right:4px"></span><span data-i18n="schedSick">Sick</span></span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--card);border:1.5px solid #00b0ff;vertical-align:middle;margin-right:4px"></span><span data-i18n="schedAnnual">Annual</span></span>
         </div>
       </div>
 
-      <div id="sched-empty" class="ap-noprofile" style="display:none">No attendance data loaded for this region yet -- the Schedule view is built from Attendance check-in records.</div>
+      <div id="sched-empty" class="ap-noprofile" style="display:none" data-i18n="schedEmptyMsg">No attendance data loaded for this region yet -- the Schedule view is built from Attendance check-in records.</div>
 
       <div id="sched-body">
         <div class="panel" style="margin-top:14px">
           <div class="ph" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-            <div class="ph-t">🗓️ Schedule — <span id="sched-month-label">—</span></div>
+            <div class="ph-t">🗓️ <span data-i18n="schedTitle">Schedule</span> — <span id="sched-month-label">—</span></div>
             <span class="ph-tag" id="sched-agent-count">—</span>
           </div>
           <div style="overflow:auto;max-height:640px" id="sched-grid-wrap"></div>
@@ -1615,7 +1630,34 @@ var T={
     auditAgentProfile:'Agent Audit Profile',
     auditProfileHint:'🔍 Search an agent by name or PSD-ID above to open their audit profile — Agent Info, SLA, QA Errors and Handled Chats all in one panel.',
     apSearchPlaceholder:'Search agent name or PSD-ID…',
-    zoomEscHint:'Press ESC or click outside to close'
+    zoomEscHint:'Press ESC or click outside to close',
+    // Sidebar nav labels reused via data-i18n (attendance/schedule pages)
+    attendance:'Attendance',schedule:'Schedule',
+    // Schedule page
+    schedExportReport:'Export Report',schedSubmitLeave:'Submit Leave',
+    schedDay:'Day',schedMid:'Mid',schedNight:'Night',schedOff:'Off',
+    schedLateEarly:'Late/Early',schedOtDayOff:'OT (Day Off)',schedSystemIssue:'System Issue',
+    schedExtraBreak:'Extra Break (2h)',schedUpl:'UPL',schedSick:'Sick',schedAnnual:'Annual',
+    schedEmptyMsg:'No attendance data loaded for this region yet -- the Schedule view is built from Attendance check-in records.',
+    schedTitle:'Schedule',schedSearchPlaceholder:'Search name or PSD-ID...',schedTodayTitle:'Today',
+    // Attendance page
+    attRate:'Attendance Rate',attRateD:'Days present / days in month',
+    attPunc:'Punctuality Rate',attPuncD:'On-time / days present',
+    attAvgWork:'Avg Work Duration',attAvgWorkD:'Per day present',
+    attDaysOff:'Days Off (Total)',attDaysOffD:'6/month entitled -- not "absent"',
+    attLateIn:'Late Check-In',attEarlyOut:'Early Check-Out',
+    attExtraBreak:'Extra Break (over 90min/day)',
+    attAnomaly:'Anomaly (Dup. Check-In / Long Shift)',attAnomalyD:'2+ punches same day, or duty over 14h',
+    attIssueDay:'Issue Day (Submitted)',attIssueDayD:'OT day-off counts as present; effect varies by type',
+    attTableTitle:'Attendance -- Internal CS',
+    attDaysPresent:'Days Present',attDaysOffCol:'Days Off',attRatePct:'Attendance %',
+    attLateCount:'Late (count)',attLateMin:'Late (min)',attEarlyCount:'Early Out (count)',attEarlyMin:'Early Out (min)',
+    attExtraBreakDays:'Extra Break (days)',attExtraBreakMin:'Extra Break (min)',attShortBreak:'Short Break (count)',
+    attAvgWorkCol:'Avg Work',attAnomalyCol:'Anomaly',attRemarksCol:'Remarks',
+    attDailyRecords:'Daily Records',attDate:'Date',attShift:'Shift',attCheckIn:'Check In',attLateCheckIn:'Late Check-In',
+    attCheckOut:'Check Out',attEarlyCheckOut:'Early Check-Out',attWorkDuration:'Work Duration',attTotalBreak:'Total Break',attRemark:'Remark',
+    // Daily Report — Monthly Bot/Agent Breakdown table
+    drMoTotal:'Total',drMoBot:'Bot',drMoStatus:'Status',drMoGood:'Good',drMoLow:'Low'
   },
   zh:{
     chatVolume:'聊天量',dailyReport:'每日报告',slaMetrics:'SLA 指标',peaksValleys:'峰谷分析',
@@ -1685,7 +1727,34 @@ var T={
     auditAgentProfile:'坐席审计档案',
     auditProfileHint:'🔍 在上方搜索坐席姓名或 PSD-ID,打开该坐席的审计档案——坐席信息、SLA、QA 错误与接单量全部集中在一个面板里。',
     apSearchPlaceholder:'搜索坐席姓名或 PSD-ID…',
-    zoomEscHint:'按 ESC 键或点击外部区域关闭'
+    zoomEscHint:'按 ESC 键或点击外部区域关闭',
+    // 侧边栏导航标签(考勤/排班页面)
+    attendance:'考勤',schedule:'排班表',
+    // Schedule 页面
+    schedExportReport:'导出报告',schedSubmitLeave:'提交请假',
+    schedDay:'白班',schedMid:'中班',schedNight:'夜班',schedOff:'休息',
+    schedLateEarly:'迟到/早退',schedOtDayOff:'OT（排休加班）',schedSystemIssue:'系统问题',
+    schedExtraBreak:'超时休息（2小时）',schedUpl:'无薪假',schedSick:'病假',schedAnnual:'年假',
+    schedEmptyMsg:'该地区尚未加载Attendance数据 —— Schedule页面是根据Attendance打卡记录生成的。',
+    schedTitle:'排班表',schedSearchPlaceholder:'搜索姓名或PSD-ID...',schedTodayTitle:'今日',
+    // Attendance 页面
+    attRate:'出勤率',attRateD:'出勤天数 / 当月总天数',
+    attPunc:'准时率',attPuncD:'准时天数 / 出勤天数',
+    attAvgWork:'平均工时',attAvgWorkD:'每个出勤日',
+    attDaysOff:'休息天数（合计）',attDaysOffD:'每月可休6天 —— 不算"缺勤"',
+    attLateIn:'迟到',attEarlyOut:'早退',
+    attExtraBreak:'超时休息（每日超90分钟）',
+    attAnomaly:'异常（重复打卡/超长班次）',attAnomalyD:'同一天2次以上打卡，或单班超14小时',
+    attIssueDay:'问题日（已提交）',attIssueDayD:'OT排休算作出勤；具体影响因类型而异',
+    attTableTitle:'考勤 —— 内部客服',
+    attDaysPresent:'出勤天数',attDaysOffCol:'休息天数',attRatePct:'出勤率',
+    attLateCount:'迟到（次数）',attLateMin:'迟到（分钟）',attEarlyCount:'早退（次数）',attEarlyMin:'早退（分钟）',
+    attExtraBreakDays:'超时休息（天数）',attExtraBreakMin:'超时休息（分钟）',attShortBreak:'短暂休息（次数）',
+    attAvgWorkCol:'平均工时',attAnomalyCol:'异常',attRemarksCol:'备注',
+    attDailyRecords:'每日打卡记录',attDate:'日期',attShift:'班次',attCheckIn:'上班打卡',attLateCheckIn:'迟到',
+    attCheckOut:'下班打卡',attEarlyCheckOut:'早退',attWorkDuration:'工作时长',attTotalBreak:'总休息时长',attRemark:'备注',
+    // Daily Report — 月度机器人/人工明细表
+    drMoTotal:'总量',drMoBot:'机器人',drMoStatus:'状态',drMoGood:'良好',drMoLow:'偏低'
   }
 };
 
@@ -1798,6 +1867,10 @@ function toggleLang(){
   if(searchEl) searchEl.placeholder=T[lang].searchCsName||'Search CS Name…';
   var apSearchEl=document.getElementById('ap-search-input');
   if(apSearchEl) apSearchEl.placeholder=T[lang].apSearchPlaceholder||'Search agent name or PSD-ID…';
+  var schedSearchEl=document.getElementById('sched-search');
+  if(schedSearchEl) schedSearchEl.placeholder=T[lang].schedSearchPlaceholder||'Search name or PSD-ID...';
+  var attSearchEl=document.getElementById('att-search');
+  if(attSearchEl) attSearchEl.placeholder=T[lang].schedSearchPlaceholder||'Search name or PSD-ID...';
   // Re-render Daily Report tags/labels
   if(drRaw) renderDailyReport(null);
   // Re-render Audit tags/labels
@@ -1807,6 +1880,19 @@ function toggleLang(){
   if(slaParsed) renderSLAMonth(slaParsed,slaMonth,slaWeek);
   // Re-render Automation tags/labels
   if(raw.autoc&&raw.autoc.length){ try{ applyAutoFilter(); }catch(e){} }
+  // Re-render Attendance page — its render functions already have full
+  // lang==='zh' logic built in (late/early labels, remarks, KPI text, etc.)
+  // but were never being re-triggered on language toggle, so switching
+  // language while viewing this page left it stuck in the old language
+  // until the next filter interaction. Same fix for Schedule below.
+  if(document.getElementById('page-attendance')&&document.getElementById('page-attendance').classList.contains('active')){
+    try{ renderAttendance(); }catch(e){}
+  }
+  // Re-render Schedule page — same "already bilingual internally, just
+  // never re-triggered on toggle" issue as Attendance above.
+  if(document.getElementById('page-schedule')&&document.getElementById('page-schedule').classList.contains('active')){
+    try{ renderSchedule(); }catch(e){}
+  }
   // Daily Report dr-overview-label
   var ovl=document.getElementById('dr-overview-label');
   if(ovl){var ovt=ovl.textContent;if(ovt!=='ALL MONTHS'&&ovt!=='全部月份'){}else ovl.textContent=lang==='zh'?'全部月份':'ALL MONTHS';}
@@ -3113,6 +3199,10 @@ function parsePeaks(rows){
 // any other brand (MP/BJ/BV/JW/JWY...) -> Outsource.
 
 var QA_KEYS=['no_reply','no_sop','late_reply','wrong_info','angry','no_solution','no_explanation','verbal','warning_letter'];
+// 1:1 index-matched to QA_KEYS — lets a QA log row's fixed error type badge
+// show translated text via the existing T[lang] dictionary entries (same
+// ones already used for the per-agent Mistake Reports table headers).
+var QA_KEY_TO_T_=['noReply','noFollowSOP','lateReply','wrongInfo','qaAngry','qaNoSolution','qaNoExplanation','qaVerbal','qaWarningLetter'];
 var QA_LABELS=['No Reply','No Follow SOP','Late Reply','Wrong Info','Angry w/Player','No Solution','No Explanation','Verbal Warning','Warning Letter'];
 var QA_LABELS_ZH=['未回复','未遵循SOP','回复迟缓','信息有误','对玩家发怒','无解决方案','无解释说明','口头警告','书面警告'];
 var QA_COLORS=['#ff4081','#ff9100','#9b7ff4','#00e676','#ff4081','#00b0ff','#64748b','#a0a0c0','#c08080'];
@@ -4288,7 +4378,12 @@ function buildQaRowCells_(r){
     var kIdx=r.errKey?QA_KEYS.indexOf(r.errKey):-1;
     var color=kIdx>=0?QA_COLORS[kIdx]:'#64748b';
     var bg=kIdx>=0?color+'22':'rgba(100,116,139,0.14)';
-    subjectCell='<span class="err-pill" style="background:'+bg+';color:'+color+'">'+r.subject+'</span>';
+    // QA_KEY_TO_T_ maps QA_KEYS (a fixed, controlled set) 1:1 to T[lang]
+    // dictionary keys, so a recognized error type shows translated —
+    // r.subject itself is raw sheet text and stays as a fallback for any
+    // value outside this known set (never silently mistranslated).
+    var subjectLabel=(kIdx>=0&&T[lang][QA_KEY_TO_T_[kIdx]])?T[lang][QA_KEY_TO_T_[kIdx]]:r.subject;
+    subjectCell='<span class="err-pill" style="background:'+bg+';color:'+color+'">'+subjectLabel+'</span>';
   }
   var chatIdCell=r.chatid?r.chatid:dash;
   if(r.chatid&&isUrl_(r.chatid)){
@@ -5677,7 +5772,7 @@ function renderAuto(d){
 
   // Table
   document.getElementById('au-tbl').innerHTML=
-    '<thead><tr><th>Month</th><th>Total</th><th>Agent</th><th>Bot</th><th>Status</th></tr></thead><tbody>'+
+    '<thead><tr><th>'+T[lang].month+'</th><th>'+T[lang].drMoTotal+'</th><th>'+T[lang].agent+'</th><th>'+T[lang].drMoBot+'</th><th>'+T[lang].drMoStatus+'</th></tr></thead><tbody>'+
     useRows.map(function(tot){
       var ag=agRows.find(function(r){return r.month===tot.month;})||{};
       var bt=btRows.find(function(r){return r.month===tot.month;})||{};
@@ -5691,7 +5786,7 @@ function renderAuto(d){
         '<td>'+fn(tv)+'</td>'+
         '<td>'+fn(av2)+' <b style="color:'+agCl+'">('+agPct+'%)</b></td>'+
         '<td>'+fn(bv)+' <b style="color:'+botCl+'">('+botPct+'%)</b></td>'+
-        '<td><span class="bdg '+(botPct>=50?'g':'r')+'">'+(botPct>=50?'✓ Good':'✗ Low')+'</span></td>'+
+        '<td><span class="bdg '+(botPct>=50?'g':'r')+'">'+(botPct>=50?('✓ '+T[lang].drMoGood):('✗ '+T[lang].drMoLow))+'</span></td>'+
         '</tr>';
     }).join('')+'</tbody>';
 }
@@ -6172,7 +6267,7 @@ function renderAttendanceDailyPanel(){
 
   if(attAgentFilter==='all'){
     if(countEl) countEl.textContent='—';
-    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">Pick an agent above to see their day-by-day check-in/out records</td></tr>';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px">'+(lang==='zh'?'请先在上方选择一位客服，查看逐日打卡记录':'Pick an agent above to see their day-by-day check-in/out records')+'</td></tr>';
     return;
   }
 
@@ -6268,6 +6363,25 @@ function populateScheduleMonthDropdown_(){
 function applyScheduleFilters(){
   schedMonthFilter=document.getElementById('sched-month').value;
   renderSchedule();
+}
+
+// Tracks which day column (if any) is currently locked-highlighted on the
+// Schedule grid. Click a date header to toggle: click the same day again
+// (or switch to a different day, or change month/filter causing a re-render)
+// clears it. Purely a visual aid — doesn't touch any data.
+var schedHighlightedDay=null;
+function schedToggleDayHighlight_(day){
+  var wrap=document.getElementById('sched-grid-wrap');
+  if(!wrap) return;
+  // Clear any existing highlight first (covers both "click same day to
+  // un-highlight" and "switch to a different day").
+  wrap.querySelectorAll('.sched-day-highlight').forEach(function(el){ el.classList.remove('sched-day-highlight'); });
+  if(schedHighlightedDay===day){
+    schedHighlightedDay=null; // was already this day — just clear it
+    return;
+  }
+  schedHighlightedDay=day;
+  wrap.querySelectorAll('[data-day="'+day+'"]').forEach(function(el){ el.classList.add('sched-day-highlight'); });
 }
 
 // Normalizes whatever text is in the sheet's Shift column down to Day/Night
@@ -6455,6 +6569,7 @@ function schedBuildData_(){
 }
 
 function renderSchedule(){
+  schedHighlightedDay=null; // any re-render replaces the DOM entirely, so a stale "day X was highlighted" flag would otherwise silently break the next click
   var emptyEl=document.getElementById('sched-empty');
   var bodyEl=document.getElementById('sched-body');
   // Roster is now the primary year-round source, so "no data" must check
@@ -6501,8 +6616,11 @@ function renderSchedule(){
   var subHtml='<tr><th class="sched-col-name" style="z-index:9;border-top:none">&nbsp;</th><th class="sched-col-psd" style="z-index:9;border-top:none">&nbsp;</th><th class="sched-col-pos" style="z-index:9;border-top:none">&nbsp;</th>';
   for(var d=1;d<=daysInMonth;d++){
     var dow=WEEKDAY_LETTERS[(JAN1_2026_DOW+monthStartOffset+d-1)%7];
-    headHtml+='<th>'+d+'</th>';
-    subHtml+='<th style="color:var(--dim)">'+dow+'</th>';
+    // data-day + onclick lets clicking a date header lock a highlight down
+    // the whole column (see schedToggleDayHighlight_) — click same day again
+    // (or a different day) to clear/switch it. Purely visual, no data change.
+    headHtml+='<th class="sched-daycol-hdr" data-day="'+d+'" onclick="schedToggleDayHighlight_('+d+')" style="cursor:pointer">'+d+'</th>';
+    subHtml+='<th class="sched-daycol-hdr" data-day="'+d+'" onclick="schedToggleDayHighlight_('+d+')" style="color:var(--dim);cursor:pointer">'+dow+'</th>';
   }
   headHtml+='<th class="sched-sum-first">Day</th><th>Mid</th><th>Night</th><th>Off</th></tr>';
   subHtml+='<th class="sched-sum-first">&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th><th>&nbsp;</th></tr>';
@@ -6521,17 +6639,17 @@ function renderSchedule(){
         leaveCount++;
         var lt=LEAVE_TYPES[leave.type]||{short:leave.type.slice(0,3).toUpperCase(),full:leave.type,color:'#facc15'};
         var ltip=a.name+' · '+schedMonthFilter+' '+d2+' · '+lt.full+(leave.note?(' — '+leave.note):'');
-        row+='<td><div class="sched-cell-inner" style="background:'+lt.color+'22;border:1.5px solid '+lt.color+';color:'+lt.color+';font-weight:800" title="'+ltip.replace(/"/g,'&quot;')+'">'+lt.short+'</div></td>';
+        row+='<td data-day="'+d2+'"><div class="sched-cell-inner" style="background:'+lt.color+'22;border:1.5px solid '+lt.color+';color:'+lt.color+';font-weight:800" title="'+ltip.replace(/"/g,'&quot;')+'">'+lt.short+'</div></td>';
       } else if(rec&&rec.__noSchedule){
         // Not an actual day off — the agent just isn't in the Roster yet
         // for this day (most often: joined partway through the month).
         // Deliberately blank, not counted in any of the Day/Mid/Night/Off
         // tallies — there's no schedule fact to tally here either way.
-        row+='<td><div class="sched-cell-inner" style="background:transparent;border:none" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · No schedule data (not yet joined)"></div></td>';
+        row+='<td data-day="'+d2+'"><div class="sched-cell-inner" style="background:transparent;border:none" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · No schedule data (not yet joined)"></div></td>';
       } else if(rec&&rec.__resigned){
         // Roster explicitly marked "Resign" — shown literally as "Resign"
         // (matching the Google Sheet), not counted toward Day/Mid/Night/Off.
-        row+='<td><div class="sched-cell-inner" style="background:rgba(229,57,53,0.14);color:#e53935;font-size:8.5px;font-weight:800;border:1.5px solid #e53935" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · Resigned">Resign</div></td>';
+        row+='<td data-day="'+d2+'"><div class="sched-cell-inner" style="background:rgba(229,57,53,0.14);color:#e53935;font-size:8.5px;font-weight:800;border:1.5px solid #e53935" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · Resigned">Resign</div></td>';
       } else if(rec&&rec.issueType==='OT_DAYOFF'){
         // OT (Day Off): the day's actual identity is still "Day Off" — the
         // agent just happened to come in anyway. Shows as OFF (not the
@@ -6541,10 +6659,10 @@ function renderSchedule(){
         offCount++;
         var otTip=a.name+' · '+rec.date+' · OT (Day Off)'+
           (rec.checkIn?(' · In '+rec.checkIn):'')+(rec.checkOut?(' · Out '+rec.checkOut):'');
-        row+='<td><div class="sched-cell-inner sched-off" style="box-shadow:inset 0 0 0 1.5px var(--purple)" title="'+otTip.replace(/"/g,'&quot;')+'">OFF</div></td>';
+        row+='<td data-day="'+d2+'"><div class="sched-cell-inner sched-off" style="box-shadow:inset 0 0 0 1.5px var(--purple)" title="'+otTip.replace(/"/g,'&quot;')+'">OFF</div></td>';
       } else if(!rec){
         offCount++;
-        row+='<td><div class="sched-cell-inner sched-off" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · Day Off">OFF</div></td>';
+        row+='<td data-day="'+d2+'"><div class="sched-cell-inner sched-off" title="'+a.name+' · '+schedMonthFilter+' '+d2+' · Day Off">OFF</div></td>';
       } else {
         var shiftKind=schedNormShift_(rec.shift); // 'day' | 'mid' | 'night'
         if(shiftKind==='mid') midCount++; else if(shiftKind==='night') nightCount++; else dayCount++;
@@ -6558,7 +6676,7 @@ function renderSchedule(){
           (rec.checkIn?(' · In '+rec.checkIn):'')+(rec.checkOut?(' · Out '+rec.checkOut):'')+
           (rec.issueType?(' · '+(ISSUE_TYPES[rec.issueType]?ISSUE_TYPES[rec.issueType].label:rec.issueType)):'')+
           (flagged&&rec.isLate?' · LATE':'')+(flagged&&rec.isEarly?' · EARLY OUT':'');
-        row+='<td><div class="'+cls+'" title="'+tip.replace(/"/g,'&quot;')+'"'+(issueColor?' style="box-shadow:inset 0 0 0 1.5px '+issueColor+'"':'')+'>'+shiftLetter+'</div></td>';
+        row+='<td data-day="'+d2+'"><div class="'+cls+'" title="'+tip.replace(/"/g,'&quot;')+'"'+(issueColor?' style="box-shadow:inset 0 0 0 1.5px '+issueColor+'"':'')+'>'+shiftLetter+'</div></td>';
       }
     }
     row+='<td class="sched-sum-cell sched-sum-day sched-sum-first">'+dayCount+'</td>'+
@@ -6570,7 +6688,45 @@ function renderSchedule(){
   }).join('') || '<tr><td colspan="'+(daysInMonth+7)+'" style="text-align:center;color:var(--muted);padding:20px;font-family:var(--font)">No agents match this filter</td></tr>';
 
   var wrap=document.getElementById('sched-grid-wrap');
-  if(wrap) wrap.innerHTML='<table class="sched-tbl"><thead>'+headHtml+subHtml+'</thead><tbody>'+bodyHtml+'</tbody></table>';
+  var footHtml=schedBuildDayTotalsFoot_(agents,byAgentDay,daysInMonth);
+  if(wrap) wrap.innerHTML='<table class="sched-tbl"><thead>'+headHtml+subHtml+'</thead><tbody>'+bodyHtml+'</tbody>'+footHtml+'</table>';
+}
+
+// Per-day total rows pinned at the bottom of the grid — mirrors the "Overall
+// CS" block already at the bottom of the real Duty Roster Google Sheet
+// (Day/Night/Week Off, one column per date, same layout). Every day column
+// gets its own headcount, computed with the exact same per-cell rules the
+// main rows above use (leave requests excluded from Off; OT_DAYOFF counts
+// as Off; not-yet-joined/resigned days count toward nothing). The Mid row
+// is only included if at least one agent has a Mid shift ANYWHERE this
+// month — otherwise it's just a row of zeros and gets skipped entirely.
+function schedBuildDayTotalsFoot_(agents,byAgentDay,daysInMonth){
+  var dayTotals=[],midTotals=[],nightTotals=[],offTotals=[];
+  var monthHasMid=false;
+  for(var d=1;d<=daysInMonth;d++){
+    var dC=0,mC=0,nC=0,oC=0;
+    agents.forEach(function(a){
+      var leave=attLeaveParsed.byAgentDay[normPsd_(a.psdId)+'||'+schedMonthFilter+'||'+d];
+      var rec=byAgentDay[a.key+'-'+d];
+      if(leave) return; // UPL/Annual/Sick — not a shift, not counted as Off either
+      if(rec&&rec.__noSchedule) return; // not yet joined
+      if(rec&&rec.__resigned) return; // resigned
+      if(rec&&rec.issueType==='OT_DAYOFF'){ oC++; return; } // shows as OFF on the grid
+      if(!rec){ oC++; return; }
+      var kind=schedNormShift_(rec.shift);
+      if(kind==='mid'){ mC++; monthHasMid=true; } else if(kind==='night') nC++; else dC++;
+    });
+    dayTotals.push(dC); midTotals.push(mC); nightTotals.push(nC); offTotals.push(oC);
+  }
+  function rowHtml(labelKey,labelText,color,vals){
+    var cells=vals.map(function(v,idx){ return '<td data-day="'+(idx+1)+'" style="text-align:center;font-weight:800;color:'+color+'">'+v+'</td>'; }).join('');
+    return '<tr class="sched-foot-row"><td colspan="3" style="text-align:right;padding-right:12px;font-weight:800;color:'+color+';border-right:2px solid var(--border2)" data-i18n="'+labelKey+'">'+labelText+'</td>'+cells+'<td colspan="4" style="border-left:2px solid var(--border2)"></td></tr>';
+  }
+  var rows=rowHtml('schedDay','Day','var(--teal)',dayTotals);
+  if(monthHasMid) rows+=rowHtml('schedMid','Mid','var(--amber)',midTotals);
+  rows+=rowHtml('schedNight','Night','var(--purple)',nightTotals);
+  rows+=rowHtml('schedOff','Off','var(--dim)',offTotals);
+  return '<tfoot>'+rows+'</tfoot>';
 }
 
 // Exports exactly what's currently on screen (same month + same search filter,
